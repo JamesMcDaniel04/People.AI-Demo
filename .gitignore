@@ -98,3 +98,6 @@ exports/
 # Build outputs
 build/
 dist/
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

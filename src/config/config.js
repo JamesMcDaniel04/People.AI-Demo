@@ -9,11 +9,11 @@ export const config = {
     environment: process.env.NODE_ENV || 'development'
   },
 
-  // MCP (Model Context Protocol) configuration
+  // MCP (Model Context Protocol) configuration with Klavis
   mcp: {
-    enabled: process.env.MCP_ENABLED === 'true' || false,
-    serverUrl: process.env.MCP_SERVER_URL || 'ws://localhost:3001',
-    apiKey: process.env.MCP_API_KEY || '',
+    enabled: process.env.MCP_ENABLED === 'true',
+    serverUrl: process.env.MCP_SERVER_URL || 'https://api.klavis.com/mcp/v1',
+    klavisApiKey: process.env.KLAVIS_API_KEY,
     timeout: parseInt(process.env.MCP_TIMEOUT) || 30000,
     retryAttempts: parseInt(process.env.MCP_RETRY_ATTEMPTS) || 3,
     capabilities: {
@@ -40,17 +40,24 @@ export const config = {
     }
   },
 
-  // AI configuration (for future AI service integration)
+  // AI configuration with Groq models
   ai: {
-    provider: process.env.AI_PROVIDER || 'claude', // claude, openai, gemini
-    model: process.env.AI_MODEL || 'claude-3-sonnet',
-    apiKey: process.env.AI_API_KEY || '',
-    maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4096,
+    provider: process.env.AI_PROVIDER || 'groq',
+    apiKey: process.env.GROQ_API_KEY,
+    models: {
+      health: process.env.AI_HEALTH_MODEL || 'kimi-k2',
+      opportunities: process.env.AI_OPPORTUNITIES_MODEL || 'kimi-k2',
+      risks: process.env.AI_RISKS_MODEL || 'gemma',
+      recommendations: process.env.AI_RECOMMENDATIONS_MODEL || 'kimi-k2',
+      insights: process.env.AI_INSIGHTS_MODEL || 'kimi-k2'
+    },
+    maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4000,
     temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.1,
     features: {
-      analysis: process.env.AI_ANALYSIS_ENABLED === 'true' || true,
-      recommendations: process.env.AI_RECOMMENDATIONS_ENABLED === 'true' || true,
-      riskAssessment: process.env.AI_RISK_ASSESSMENT_ENABLED === 'true' || true
+      analysis: process.env.AI_ANALYSIS_ENABLED !== 'false',
+      recommendations: process.env.AI_RECOMMENDATIONS_ENABLED !== 'false',
+      riskAssessment: process.env.AI_RISK_ASSESSMENT_ENABLED !== 'false',
+      insights: process.env.AI_INSIGHTS_ENABLED !== 'false'
     }
   },
 

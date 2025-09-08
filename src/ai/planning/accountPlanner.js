@@ -297,7 +297,183 @@ export class AccountPlannerApp {
     return quality;
   }
 
-  // Additional helper methods would go here...
+  // Additional helper methods
+  calculateRelationshipDuration(foundedDate) {
+    if (!foundedDate) return 'Unknown duration';
+    const founded = new Date(foundedDate);
+    const now = new Date();
+    const years = Math.floor((now - founded) / (365 * 24 * 60 * 60 * 1000));
+    return `${years} years`;
+  }
+
+  getContractStatus(contractEndDate) {
+    if (!contractEndDate) return 'No active contract';
+    const endDate = new Date(contractEndDate);
+    const now = new Date();
+    const daysUntilExpiry = Math.floor((endDate - now) / (24 * 60 * 60 * 1000));
+    
+    if (daysUntilExpiry < 0) return 'Expired';
+    if (daysUntilExpiry < 30) return 'Expiring soon';
+    if (daysUntilExpiry < 90) return 'Renewal required';
+    return 'Active';
+  }
+
+  calculateEngagementLevel(interactions) {
+    if (!interactions || interactions.length === 0) return 'Low';
+    const totalInteractions = interactions.flatMap(source => source.data).length;
+    
+    if (totalInteractions >= 10) return 'High';
+    if (totalInteractions >= 5) return 'Medium';
+    return 'Low';
+  }
+
+  getRecentActivity(interactions) {
+    if (!interactions || interactions.length === 0) return 'No recent activity';
+    const recentInteractions = interactions
+      .flatMap(source => source.data)
+      .filter(interaction => {
+        const daysSince = (Date.now() - new Date(interaction.date)) / (1000 * 60 * 60 * 24);
+        return daysSince <= 7;
+      });
+    
+    if (recentInteractions.length === 0) return 'No activity this week';
+    return `${recentInteractions.length} interactions this week`;
+  }
+
+  calculateStakeholderCoverage(stakeholderMap) {
+    const totalStakeholders = Object.values(stakeholderMap || {})
+      .reduce((total, stakeholders) => total + stakeholders.length, 0);
+    
+    if (totalStakeholders >= 10) return 'Excellent';
+    if (totalStakeholders >= 5) return 'Good';
+    if (totalStakeholders >= 3) return 'Adequate';
+    return 'Limited';
+  }
+
+  countTotalStakeholders(stakeholders) {
+    if (!stakeholders || stakeholders.length === 0) return 0;
+    return stakeholders.flatMap(source => source.data).length;
+  }
+
+  getPrimaryContact(stakeholders) {
+    if (!stakeholders || stakeholders.length === 0) return 'None identified';
+    const allStakeholders = stakeholders.flatMap(source => source.data);
+    const primaryContact = allStakeholders.find(s => s.relationshipStrength === 'Strong');
+    return primaryContact ? primaryContact.name : (allStakeholders[0]?.name || 'None identified');
+  }
+
+  assessRelationshipHealth(stakeholderMap) {
+    const stakeholders = Object.values(stakeholderMap || {}).flat();
+    if (stakeholders.length === 0) return 'No relationships';
+    
+    const strongRelationships = stakeholders.filter(s => s.relationshipStrength === 'Strong').length;
+    const totalRelationships = stakeholders.length;
+    const ratio = strongRelationships / totalRelationships;
+    
+    if (ratio >= 0.5) return 'Strong';
+    if (ratio >= 0.3) return 'Good';
+    if (ratio >= 0.1) return 'Developing';
+    return 'Weak';
+  }
+
+  createOpportunityTimeline(opportunities) {
+    if (!opportunities || opportunities.length === 0) return {};
+    
+    const timeline = {};
+    opportunities.forEach(opp => {
+      const period = opp.timeline || 'Q2 2024';
+      if (!timeline[period]) timeline[period] = [];
+      timeline[period].push(opp);
+    });
+    
+    return timeline;
+  }
+
+  identifyKeyRelationships(stakeholderMap) {
+    const stakeholders = Object.values(stakeholderMap || {}).flat();
+    return stakeholders
+      .filter(s => s.relationshipStrength === 'Strong' || s.influence === 'High')
+      .map(s => ({
+        name: s.name,
+        role: s.role,
+        strength: s.relationshipStrength,
+        influence: s.influence,
+        riskLevel: s.riskLevel
+      }));
+  }
+
+  developEngagementStrategy(stakeholderMap) {
+    const strategies = [];
+    const stakeholders = Object.values(stakeholderMap || {}).flat();
+    
+    const weakRelationships = stakeholders.filter(s => s.relationshipStrength === 'Weak');
+    if (weakRelationships.length > 0) {
+      strategies.push(`Strengthen ${weakRelationships.length} weak relationships`);
+    }
+    
+    const highInfluence = stakeholders.filter(s => s.influence === 'High');
+    strategies.push(`Maintain regular touchpoints with ${highInfluence.length} high-influence stakeholders`);
+    
+    return strategies;
+  }
+
+  assessStakeholderRisks(stakeholderMap) {
+    const risks = [];
+    const stakeholders = Object.values(stakeholderMap || {}).flat();
+    
+    const highRiskStakeholders = stakeholders.filter(s => s.riskLevel === 'high');
+    if (highRiskStakeholders.length > 0) {
+      risks.push({
+        type: 'stakeholder_churn',
+        description: `${highRiskStakeholders.length} stakeholders at high risk of disengagement`,
+        mitigation: 'Immediate re-engagement required'
+      });
+    }
+    
+    return risks;
+  }
+
+  developMitigationStrategies(risks) {
+    return risks.map(risk => ({
+      risk: risk.type,
+      strategy: risk.mitigation || 'Monitor and assess',
+      timeline: '30 days',
+      owner: 'Account Manager'
+    }));
+  }
+
+  createContingencyPlans(risks) {
+    return risks.map(risk => ({
+      risk: risk.type,
+      contingency: `If ${risk.description}, then escalate to management and implement crisis response`,
+      triggers: ['Risk probability > 70%', 'Early warning indicators present'],
+      actions: ['Executive escalation', 'Customer retention team activation']
+    }));
+  }
+
+  createRiskMonitoringPlan(risks) {
+    return {
+      frequency: 'Weekly',
+      metrics: risks.map(risk => `${risk.type} risk level`),
+      alerts: 'Automated alerts for high-risk conditions',
+      reporting: 'Monthly risk dashboard updates'
+    };
+  }
+
+  generateDataRecommendations(accountData) {
+    const recommendations = [];
+    
+    if (!accountData.interactions || accountData.interactions[0]?.data?.length < 5) {
+      recommendations.push('Increase interaction frequency to improve data quality');
+    }
+    
+    if (!accountData.stakeholders || accountData.stakeholders[0]?.data?.length < 3) {
+      recommendations.push('Identify additional stakeholders for comprehensive mapping');
+    }
+    
+    return recommendations;
+  }
+
   countRecentInteractions(interactions, days) {
     if (!interactions) return 0;
     const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);

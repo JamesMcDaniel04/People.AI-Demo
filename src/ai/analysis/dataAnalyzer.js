@@ -1,23 +1,78 @@
 import { AccountHealth, OpportunityType, RiskLevel } from '../../types/index.js';
+import { GroqService } from '../services/groqService.js';
 
 export class DataAnalyzer {
   constructor(config) {
     this.config = config;
+    this.groqService = new GroqService(config);
   }
 
   async analyzeAccountData(accountData) {
-    console.log('🔍 Analyzing account data...');
+    console.log('🤖 AI-powered account analysis starting...');
     
+    // AI-powered health analysis
+    const healthScore = await this.groqService.analyzeAccountHealth(accountData);
+    
+    // AI-powered opportunity identification
+    const opportunities = await this.groqService.identifyOpportunities(accountData, healthScore);
+    
+    // AI-powered risk assessment
+    const risks = await this.groqService.assessRisks(accountData, healthScore, opportunities);
+    
+    // Generate AI insights
+    const insights = await this.groqService.generateInsights(accountData, { healthScore, opportunities, risks });
+
     const analysis = {
-      healthScore: await this.calculateHealthScore(accountData),
-      opportunities: await this.identifyOpportunities(accountData),
-      risks: await this.assessRisks(accountData),
+      healthScore: this.mapHealthScoreToLegacyFormat(healthScore),
+      opportunities: opportunities.map(opp => this.mapOpportunityToLegacyFormat(opp)),
+      risks: risks.map(risk => this.mapRiskToLegacyFormat(risk)),
       stakeholderMap: await this.mapStakeholders(accountData),
       trends: await this.analyzeTrends(accountData),
-      insights: await this.generateInsights(accountData)
+      insights: insights
     };
 
+    console.log('✅ AI-powered analysis completed');
     return analysis;
+  }
+
+  // Map AI response formats to legacy formats for compatibility
+  mapHealthScoreToLegacyFormat(aiHealthScore) {
+    return {
+      overall: aiHealthScore.healthStatus || AccountHealth.GOOD,
+      score: aiHealthScore.overallScore || 75,
+      factors: aiHealthScore.factors || {
+        financial: 75,
+        engagement: 75,
+        growth: 75,
+        satisfaction: 75
+      },
+      strengths: aiHealthScore.strengths || [],
+      weaknesses: aiHealthScore.weaknesses || [],
+      trend: aiHealthScore.trend || 'stable'
+    };
+  }
+
+  mapOpportunityToLegacyFormat(aiOpportunity) {
+    return {
+      type: aiOpportunity.type || OpportunityType.EXPANSION,
+      priority: aiOpportunity.priority || 'medium',
+      value: aiOpportunity.value || 100000,
+      confidence: aiOpportunity.confidence || 0.5,
+      reasoning: aiOpportunity.reasoning || aiOpportunity.description || 'AI-identified opportunity',
+      timeline: aiOpportunity.timeline || 'Q2 2024',
+      requirements: aiOpportunity.requirements || []
+    };
+  }
+
+  mapRiskToLegacyFormat(aiRisk) {
+    return {
+      type: aiRisk.type || 'general',
+      level: aiRisk.level || RiskLevel.MEDIUM,
+      probability: aiRisk.probability || 0.3,
+      impact: aiRisk.impact || 'medium',
+      description: aiRisk.description || aiRisk.title || 'AI-identified risk',
+      mitigation: Array.isArray(aiRisk.mitigation) ? aiRisk.mitigation.join(', ') : (aiRisk.mitigation || 'Monitor and assess')
+    };
   }
 
   async calculateHealthScore(accountData) {

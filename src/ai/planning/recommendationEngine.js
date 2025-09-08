@@ -1,18 +1,32 @@
+import { GroqService } from '../services/groqService.js';
+
 export class RecommendationEngine {
   constructor(config) {
     this.config = config;
+    this.groqService = new GroqService(config);
   }
 
   async generateRecommendations(accountData, analysis) {
-    console.log('💡 Generating strategic recommendations...');
+    console.log('🤖 AI-powered strategic recommendations...');
     
+    const aiRecommendations = await this.groqService.generateStrategicRecommendations(
+      accountData, 
+      analysis.healthScore, 
+      analysis.opportunities, 
+      analysis.risks
+    );
+
+    // Production-ready AI recommendations
     const recommendations = {
-      immediate: await this.generateImmediateActions(accountData, analysis),
-      shortTerm: await this.generateShortTermActions(accountData, analysis),
-      longTerm: await this.generateLongTermActions(accountData, analysis),
-      resources: await this.identifyResourceRequirements(analysis)
+      immediate: aiRecommendations.immediate,
+      shortTerm: aiRecommendations.shortTerm,
+      longTerm: aiRecommendations.longTerm,
+      resources: await this.identifyResourceRequirements(analysis),
+      executiveSummary: aiRecommendations.executiveSummary,
+      keyPriorities: aiRecommendations.keyPriorities
     };
 
+    console.log('✅ AI-powered recommendations generated');
     return recommendations;
   }
 
