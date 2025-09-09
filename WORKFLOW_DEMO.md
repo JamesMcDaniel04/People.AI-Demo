@@ -2,6 +2,11 @@
 
 ## Quick Start Commands
 
+Set data source for the demo (no external credentials needed):
+```bash
+export DATA_SOURCE=sample
+```
+
 ### 1. Start API Server Only
 ```bash
 npm run workflow

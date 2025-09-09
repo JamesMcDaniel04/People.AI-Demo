@@ -1,4 +1,8 @@
-import { ToolFormat } from 'klavis/types';
+// Define the constants we need since types aren't properly exported
+const ToolFormat = {
+  OPENAI: 'openai',
+  CLAUDE: 'claude'
+};
 
 export class ToolIntegrationService {
   constructor(klavisProvider) {

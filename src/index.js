@@ -52,10 +52,15 @@ async function main() {
 }
 
 function validateConfiguration() {
-  const required = [
-    { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey },
-    { key: 'MCP_ENABLED', value: config.mcp.enabled }
-  ];
+  const required = [];
+
+  // Require MCP only when using MCP data source
+  if (config.data?.source === 'mcp') {
+    required.push(
+      { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey },
+      { key: 'MCP_ENABLED', value: config.mcp.enabled }
+    );
+  }
 
   // Check AI provider requirements
   if (config.ai.provider === 'mixed') {
@@ -76,8 +81,9 @@ function validateConfiguration() {
     throw new Error(`Missing required environment variables: ${missingKeys}`);
   }
 
-  if (!config.mcp.enabled) {
-    throw new Error('MCP must be enabled for production use');
+  // When using MCP, ensure it is enabled
+  if (config.data?.source === 'mcp' && !config.mcp.enabled) {
+    throw new Error('MCP must be enabled for MCP data source');
   }
   
   logger.info('✅ Configuration validated successfully');

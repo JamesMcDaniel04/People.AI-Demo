@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Production-Ready AI Account Planner** - Enterprise-grade AI-powered account planning system with Klavis MCP orchestration, Groq AI models, and comprehensive GTM data integration for strategic account planning demonstrations.
+**Production-Ready AI Account Planner** - Enterprise-grade AI-powered account planning system with Klavis MCP orchestration, mixed AI models (OpenAI + Anthropic), and comprehensive GTM data integration for strategic account planning demonstrations.
 
 ## Production Commands
 
@@ -23,21 +23,21 @@ npm start stripe          # Example: Generate plan for Stripe
 
 ### Environment Setup
 **CRITICAL**: Use the production `.env` file with real API keys:
-- `GROQ_API_KEY` - Production Groq API key for AI models
-- `KLAVIS_API_KEY` - Klavis MCP orchestration key: `zSbY9YysFRHxwfkLiV4y8aEf/oxHdyWS88LnYAMUriU=`
-- `MCP_ENABLED=true` - Required for production
+- `OPENAI_API_KEY` - OpenAI API key for GPT models
+- `ANTHROPIC_API_KEY` - Anthropic API key for Claude models
+- `KLAVIS_API_KEY` - Klavis MCP orchestration key
+- `MCP_ENABLED=true` - Required when using MCP data source
 
 ## Production Architecture
 
 ### AI-First Design
-- **Groq AI Models**: Kimi K2, Qwen 3, Llama 3.1 70B for multi-model analysis
-- **No Fallbacks**: Production system requires AI availability
+- **Mixed AI Models**: Claude 3.5 Sonnet + GPT‑4o for multi-model analysis
 - **Model Assignment**:
-  - Health Analysis: Kimi K2
-  - Opportunities: Kimi K2  
-  - Risk Assessment: Gemma2 9B
-  - Strategic Recommendations: Kimi K2
-  - Insights Generation: Kimi K2
+  - Health Analysis: Claude 3.5 Sonnet
+  - Opportunities: GPT‑4o
+  - Risk Assessment: Claude 3.5 Sonnet
+  - Strategic Recommendations: GPT‑4o
+  - Insights Generation: Claude 3.5 Sonnet
 
 ### Data Integration (Production)
 - **Primary**: Klavis MCP Provider (`src/data/mcp/klavisProvider.js`)
@@ -58,25 +58,12 @@ npm start stripe          # Example: Generate plan for Stripe
 ### Required Environment Variables
 ```env
 NODE_ENV=production
-# AI Providers (Mixed: OpenAI + Anthropic)
+DATA_SOURCE=mcp # or sample|external
 AI_PROVIDER=mixed
 OPENAI_API_KEY=your_openai_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-
-# Klavis MCP Integration
-KLAVIS_API_KEY=zSbY9YysFRHxwfkLiV4y8aEf/oxHdyWS88LnYAMUriU=
+KLAVIS_API_KEY=your_klavis_api_key_here
 MCP_ENABLED=true
-
-# MCP Server Settings
-MCP_GMAIL_ENABLED=true
-MCP_CALENDAR_ENABLED=true
-MCP_DRIVE_ENABLED=true
-MCP_SLACK_ENABLED=true
-MCP_NOTION_ENABLED=true
-
-# AI Features
-AI_ANALYSIS_ENABLED=true
-AI_RECOMMENDATIONS_ENABLED=true
 ```
 
 ### AI Model Configuration
@@ -124,9 +111,9 @@ AI_RECOMMENDATIONS_ENABLED=true
 
 ### Prerequisites
 - Node.js 18+ with ESM support
-- Valid Groq API key
-- Klavis MCP access credentials
-- Production environment variables
+- OpenAI and/or Anthropic API keys
+- Klavis MCP access credentials (if using MCP)
+- Appropriate environment variables configured
 
 ### Security
 - **No Hardcoded Keys**: All secrets via environment

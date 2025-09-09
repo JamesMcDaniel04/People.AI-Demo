@@ -107,6 +107,7 @@ export const config = {
 
   // Data processing configuration
   data: {
+    source: process.env.DATA_SOURCE || 'mcp',
     cacheEnabled: process.env.DATA_CACHE_ENABLED !== 'false',
     cacheDuration: parseInt(process.env.DATA_CACHE_DURATION) || 3600000, // 1 hour in ms
     batchSize: parseInt(process.env.DATA_BATCH_SIZE) || 100,

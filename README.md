@@ -66,6 +66,9 @@ ai-account-planner/
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and settings
+   # Choose data source: mcp | sample | external
+   # For demo without credentials, set:
+   echo "DATA_SOURCE=sample" >> .env
    ```
 
 3. **Run the application**:

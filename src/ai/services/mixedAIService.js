@@ -568,6 +568,9 @@ export class MixedAIService {
       `- ${stakeholder.name} (${stakeholder.role}): ${stakeholder.sentiment || 'neutral'} sentiment`
     ).join('\n') || 'No stakeholder data available'}
 
+    External Signals (News/Market):
+    ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
     Generate insights about:
     1. Communication patterns and sentiment trends
     2. Stakeholder dynamics and influence mapping

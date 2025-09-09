@@ -181,8 +181,9 @@ ENDPOINTS:
   POST /quick/account-plan            # Quick account plan generation
 
 ENVIRONMENT VARIABLES:
-  GROQ_API_KEY                        # Required: Groq AI API key
-  KLAVIS_API_KEY                      # Required: Klavis MCP key
+  OPENAI_API_KEY                      # Required: OpenAI API key
+  ANTHROPIC_API_KEY                   # Required: Anthropic API key
+  KLAVIS_API_KEY                      # Required: Klavis MCP key (if DATA_SOURCE=mcp)
   WORKFLOW_PORT                       # Optional: Server port (default: 3001)
   SMTP_HOST, SMTP_USER, SMTP_PASS     # Optional: Email configuration
   SLACK_BOT_TOKEN                     # Optional: Slack integration
