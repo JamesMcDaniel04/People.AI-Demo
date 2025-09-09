@@ -1,26 +1,26 @@
 import { AccountHealth, OpportunityType, RiskLevel } from '../../types/index.js';
-import { GroqService } from '../services/groqService.js';
+import { MixedAIService } from '../services/mixedAIService.js';
 
 export class DataAnalyzer {
-  constructor(config) {
+  constructor(config, klavisProvider = null) {
     this.config = config;
-    this.groqService = new GroqService(config);
+    this.aiService = new MixedAIService(config, klavisProvider);
   }
 
   async analyzeAccountData(accountData) {
     console.log('🤖 AI-powered account analysis starting...');
     
     // AI-powered health analysis
-    const healthScore = await this.groqService.analyzeAccountHealth(accountData);
+    const healthScore = await this.aiService.analyzeAccountHealth(accountData);
     
     // AI-powered opportunity identification
-    const opportunities = await this.groqService.identifyOpportunities(accountData, healthScore);
+    const opportunities = await this.aiService.identifyOpportunities(accountData, healthScore);
     
     // AI-powered risk assessment
-    const risks = await this.groqService.assessRisks(accountData, healthScore, opportunities);
+    const risks = await this.aiService.assessRisks(accountData, healthScore, opportunities);
     
     // Generate AI insights
-    const insights = await this.groqService.generateInsights(accountData, { healthScore, opportunities, risks });
+    const insights = await this.aiService.generateInsights(accountData, { healthScore, opportunities, risks });
 
     const analysis = {
       healthScore: this.mapHealthScoreToLegacyFormat(healthScore),

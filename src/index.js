@@ -53,10 +53,21 @@ async function main() {
 
 function validateConfiguration() {
   const required = [
-    { key: 'GROQ_API_KEY', value: config.ai.apiKey },
     { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey },
     { key: 'MCP_ENABLED', value: config.mcp.enabled }
   ];
+
+  // Check AI provider requirements
+  if (config.ai.provider === 'mixed') {
+    required.push(
+      { key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey },
+      { key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey }
+    );
+  } else if (config.ai.provider === 'openai') {
+    required.push({ key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey });
+  } else if (config.ai.provider === 'anthropic') {
+    required.push({ key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey });
+  }
 
   const missing = required.filter(item => !item.value);
   

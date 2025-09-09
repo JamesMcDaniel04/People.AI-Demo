@@ -5,8 +5,10 @@ export class AccountPlannerApp {
   constructor(dataManager, config) {
     this.dataManager = dataManager;
     this.config = config;
-    this.analyzer = new DataAnalyzer(config);
-    this.recommendationEngine = new RecommendationEngine(config);
+    // Pass the Klavis provider to enable tool calling in AI services
+    const klavisProvider = dataManager.getKlavisProvider();
+    this.analyzer = new DataAnalyzer(config, klavisProvider);
+    this.recommendationEngine = new RecommendationEngine(config, klavisProvider);
   }
 
   async generateAccountPlan(accountName) {

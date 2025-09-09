@@ -41,12 +41,15 @@ npm start stripe          # Example: Generate plan for Stripe
 
 ### Data Integration (Production)
 - **Primary**: Klavis MCP Provider (`src/data/mcp/klavisProvider.js`)
-- **Capabilities**: Email, Calendar, CRM, Documents, Real-time sync
-- **No Mock Data**: All data sourced from live Klavis MCP endpoints
+- **Capabilities**: Gmail, Google Calendar, Google Drive, Slack, Notion
+- **Tool Integration**: AI function calling with MCP tools
+- **Authentication**: OAuth 2.0 for all services
+- **Real-time**: Live data access via Klavis MCP servers
 
 ### Key Production Components
-- **KlavisProvider**: Enterprise MCP integration with full API coverage
-- **GroqService**: Multi-model AI service with error handling
+- **KlavisProvider**: Enterprise MCP integration with official SDK
+- **MixedAIService**: Multi-provider AI with OpenAI and Anthropic
+- **ToolIntegrationService**: Function calling coordination layer
 - **Logger**: Production logging with file and console output
 - **Configuration**: Environment-driven with validation
 
@@ -55,19 +58,33 @@ npm start stripe          # Example: Generate plan for Stripe
 ### Required Environment Variables
 ```env
 NODE_ENV=production
-GROQ_API_KEY=your_groq_key
+# AI Providers (Mixed: OpenAI + Anthropic)
+AI_PROVIDER=mixed
+OPENAI_API_KEY=your_openai_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Klavis MCP Integration
 KLAVIS_API_KEY=zSbY9YysFRHxwfkLiV4y8aEf/oxHdyWS88LnYAMUriU=
 MCP_ENABLED=true
-MCP_SERVER_URL=https://api.klavis.com/mcp/v1
+
+# MCP Server Settings
+MCP_GMAIL_ENABLED=true
+MCP_CALENDAR_ENABLED=true
+MCP_DRIVE_ENABLED=true
+MCP_SLACK_ENABLED=true
+MCP_NOTION_ENABLED=true
+
+# AI Features
 AI_ANALYSIS_ENABLED=true
 AI_RECOMMENDATIONS_ENABLED=true
 ```
 
 ### AI Model Configuration
-- **Kimi K2**: Primary model for health, opportunities, recommendations, insights
-- **Gemma2 9B**: Specialized for risk assessment
+- **Claude 3.5 Sonnet**: Health analysis, risk assessment, insights generation
+- **GPT-4o**: Opportunity identification, strategic recommendations
 - **Temperature**: 0.1 (production optimized)
 - **Max Tokens**: 4000
+- **Tool Calling**: Enabled with Klavis MCP integration
 
 ### Data Processing (Production)
 - **Cache Duration**: 30 minutes (1800000ms)

@@ -1,15 +1,15 @@
-import { GroqService } from '../services/groqService.js';
+import { MixedAIService } from '../services/mixedAIService.js';
 
 export class RecommendationEngine {
-  constructor(config) {
+  constructor(config, klavisProvider = null) {
     this.config = config;
-    this.groqService = new GroqService(config);
+    this.aiService = new MixedAIService(config, klavisProvider);
   }
 
   async generateRecommendations(accountData, analysis) {
     console.log('🤖 AI-powered strategic recommendations...');
     
-    const aiRecommendations = await this.groqService.generateStrategicRecommendations(
+    const aiRecommendations = await this.aiService.generateStrategicRecommendations(
       accountData, 
       analysis.healthScore, 
       analysis.opportunities, 
