@@ -55,11 +55,28 @@ class WorkflowServer {
   }
 
   validateEnvironment() {
-    const required = [
-      { key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey },
-      { key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey },
-      { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey }
-    ];
+    const source = (config.data?.source || 'mcp').toLowerCase();
+    const required = [];
+
+    // Require AI keys based on provider
+    if (config.ai.provider === 'mixed') {
+      required.push(
+        { key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey },
+        { key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey }
+      );
+    } else if (config.ai.provider === 'openai') {
+      required.push({ key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey });
+    } else if (config.ai.provider === 'anthropic') {
+      required.push({ key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey });
+    }
+
+    // Only require Klavis when using MCP
+    if (source === 'mcp') {
+      required.push(
+        { key: 'MCP_ENABLED', value: config.mcp.enabled },
+        { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey }
+      );
+    }
 
     const missing = required.filter(item => !item.value);
     
@@ -72,6 +89,7 @@ class WorkflowServer {
     this.logger.info('✅ Environment validated', {
       aiProvider: config.ai.provider,
       aiModels: Object.keys(config.ai.models),
+      dataSource: source,
       mcpEnabled: config.mcp.enabled,
       environment: config.app.environment
     });

@@ -227,6 +227,9 @@ export class MixedAIService {
     Stakeholder Information:
     ${JSON.stringify(accountData.stakeholders?.[0]?.data || [], null, 2)}
 
+    External Signals (News/Market):
+    ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
     Please provide:
     1. Overall health score (0-100) with detailed reasoning
     2. Key strengths and weaknesses
@@ -252,7 +255,10 @@ export class MixedAIService {
     }
     `;
 
-    const response = await this.generateCompletion(prompt, this.models.health);
+    const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
+    const response = useTools
+      ? await this.generateCompletionWithTools(prompt, this.models.health)
+      : await this.generateCompletion(prompt, this.models.health);
     
     try {
       const parsedResponse = JSON.parse(response);
@@ -295,6 +301,9 @@ export class MixedAIService {
     Stakeholder Map:
     ${JSON.stringify(accountData.stakeholders?.[0]?.data || [], null, 2)}
 
+    External Signals (News/Market):
+    ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
     Health Analysis:
     ${JSON.stringify(healthAnalysis, null, 2)}
 
@@ -330,7 +339,10 @@ export class MixedAIService {
     ]
     `;
 
-    const response = await this.generateCompletion(prompt, this.models.opportunities);
+    const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
+    const response = useTools
+      ? await this.generateCompletionWithTools(prompt, this.models.opportunities)
+      : await this.generateCompletion(prompt, this.models.opportunities);
     
     try {
       const opportunities = JSON.parse(response);
@@ -379,6 +391,9 @@ export class MixedAIService {
 
     Identified Opportunities:
     ${JSON.stringify(opportunities, null, 2)}
+
+    External Signals (News/Market):
+    ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
 
     Identify and assess risks in these categories:
     1. Churn risk (likelihood of losing the account)
@@ -509,9 +524,12 @@ export class MixedAIService {
     }
     `;
 
-    const response = await this.generateCompletion(prompt, this.models.recommendations, {
-      max_tokens: 4000,
-      temperature: 0.2
+    const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
+    const response = useTools
+      ? await this.generateCompletionWithTools(prompt, this.models.recommendations, { max_tokens: 4000, temperature: 0.2 })
+      : await this.generateCompletion(prompt, this.models.recommendations, {
+        max_tokens: 4000,
+        temperature: 0.2
     });
     
     try {
@@ -594,8 +612,11 @@ export class MixedAIService {
     ]
     `;
 
-    const response = await this.generateCompletion(prompt, this.models.insights, {
-      temperature: 0.3
+    const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
+    const response = useTools
+      ? await this.generateCompletionWithTools(prompt, this.models.insights, { temperature: 0.3 })
+      : await this.generateCompletion(prompt, this.models.insights, {
+        temperature: 0.3
     });
     
     try {

@@ -44,13 +44,15 @@ export class AccountPlannerApp {
   }
 
   async createAccountPlan(accountName, accountData, analysis, recommendations) {
+    const dataSources = this.summarizeDataSources(accountData);
     const plan = {
       metadata: {
         accountName,
         generatedDate: new Date().toISOString(),
         planPeriod: 'Q2-Q4 2024',
         lastUpdated: new Date().toISOString(),
-        version: '1.0'
+        version: '1.0',
+        dataSources
       },
       
       executiveSummary: this.generateExecutiveSummary(accountData, analysis),
@@ -106,6 +108,21 @@ export class AccountPlannerApp {
     };
 
     return plan;
+  }
+
+  summarizeDataSources(accountData) {
+    const sections = ['emails', 'calls', 'interactions', 'stakeholders', 'documents', 'calendar', 'crm', 'financial', 'external'];
+    const summary = { bySection: {}, sourcesPresent: new Set() };
+    for (const key of sections) {
+      const arr = Array.isArray(accountData[key]) ? accountData[key] : [];
+      const total = arr.reduce((acc, src) => acc + (Array.isArray(src.data) ? src.data.length : (src.data ? 1 : 0)), 0);
+      summary.bySection[key] = { sources: arr.map(s => s.source), count: total };
+      arr.forEach(s => summary.sourcesPresent.add(s.source));
+    }
+    return {
+      sources: Array.from(summary.sourcesPresent),
+      sections: summary.bySection
+    };
   }
 
   generateExecutiveSummary(accountData, analysis) {

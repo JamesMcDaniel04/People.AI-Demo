@@ -62,6 +62,13 @@ export class WorkflowAPI {
     this.app.post('/quick/account-plan', this.quickAccountPlan.bind(this));
     this.app.post('/quick/distribute', this.quickDistribute.bind(this));
     
+    // Integration status
+    this.app.get('/integration/status', this.getIntegrationStatus.bind(this));
+
+    // Minimal Klavis OAuth (demo stub)
+    this.app.get('/auth/klavis/start', this.startKlavisAuth.bind(this));
+    this.app.get('/auth/klavis/callback', this.klavisAuthCallback.bind(this));
+
     // Template routes
     this.app.get('/templates', this.getWorkflowTemplates.bind(this));
     this.app.post('/templates/:templateId/create', this.createFromTemplate.bind(this));
@@ -490,7 +497,7 @@ export class WorkflowAPI {
               config: {
                 channels: [{ channel: '#strategy' }],
                 format: 'detailed',
-                mentions: ['@strategy-team']
+                mentions: ['U000STRAT']
               }
             },
             {
@@ -518,7 +525,7 @@ export class WorkflowAPI {
               config: {
                 channels: [{ channel: '#alerts' }],
                 format: 'alert',
-                mentions: ['@account-managers']
+                mentions: ['U000ACCTM']
               }
             },
             {
@@ -571,3 +578,48 @@ export class WorkflowAPI {
     }
   }
 }
+  async getIntegrationStatus(req, res) {
+    try {
+      const status = await this.orchestrator.dataManager.getStatus();
+      res.json({ status: 'success', integration: status });
+    } catch (error) {
+      this.logger.error('❌ Failed to get integration status', { error: error.message });
+      res.status(500).json({ error: 'Failed to get integration status', message: error.message });
+    }
+  }
+
+  async startKlavisAuth(req, res) {
+    try {
+      const redirectUri = this.config.mcp?.oauth?.redirectUri || 'http://localhost:3001/auth/klavis/callback';
+      const state = Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
+      // In a real flow, redirect user to Klavis connection URL.
+      res.json({
+        status: 'success',
+        message: 'Use your Klavis console to connect services, then return with code/token to callback.',
+        redirectUri,
+        state,
+        callbackExample: `${redirectUri}?server=gmail&token=demo-token&state=${state}`
+      });
+    } catch (error) {
+      this.logger.error('❌ Failed to start Klavis auth', { error: error.message });
+      res.status(500).json({ error: 'Failed to start Klavis auth', message: error.message });
+    }
+  }
+
+  async klavisAuthCallback(req, res) {
+    try {
+      const { server, token } = req.query;
+      if (!server || !token) {
+        return res.status(400).json({ error: 'server and token query params are required' });
+      }
+      const klavis = this.orchestrator.dataManager.getKlavisProvider?.();
+      if (!klavis) {
+        return res.status(400).json({ error: 'Klavis provider not initialized' });
+      }
+      await klavis.connectServer(server, { token });
+      res.json({ status: 'success', connected: server });
+    } catch (error) {
+      this.logger.error('❌ Klavis auth callback failed', { error: error.message });
+      res.status(500).json({ error: 'Klavis auth callback failed', message: error.message });
+    }
+  }

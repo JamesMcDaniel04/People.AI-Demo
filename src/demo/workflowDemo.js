@@ -39,7 +39,7 @@ export class WorkflowDemo {
               config: {
                 channels: [{ channel: '#account-health-demo' }],
                 format: 'summary',
-                mentions: ['@demo-team']
+                mentions: ['U000DEMO1']
               }
             }
           ],
@@ -123,7 +123,7 @@ export class WorkflowDemo {
               config: {
                 channels: [{ channel: '#risk-alerts' }],
                 format: 'alert',
-                mentions: ['@account-managers', '@leadership']
+                mentions: ['U000MGR01', 'U000LEAD1']
               }
             },
             {

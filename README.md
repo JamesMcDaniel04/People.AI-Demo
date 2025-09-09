@@ -81,6 +81,40 @@ ai-account-planner/
    npm run dev
    ```
 
+5. **Check Integration Status**:
+   ```bash
+   curl http://localhost:3001/integration/status
+   # Shows data source, MCP servers/tools, sample/external readiness
+   ```
+
+## Data Sources & Status
+
+- Select source via `DATA_SOURCE`: `mcp | sample | external`.
+- Integration status endpoint: `GET /integration/status` returns current source, available providers, MCP server/tool counts, and external API status.
+
+### Option B: Real-time Enrichment via NewsAPI.org
+
+To demonstrate live external enrichment:
+
+1. Set environment for external source:
+   ```env
+   DATA_SOURCE=external
+   EXTERNAL_API_ENABLED=true
+   EXTERNAL_API_BASE_URL=https://newsapi.org/v2
+   EXTERNAL_API_KEY=your_newsapi_key_here
+   NEWS_API_ENDPOINT=/everything
+   ```
+2. Restart the server, then check status:
+   ```bash
+   curl http://localhost:3001/integration/status
+   ```
+   You should see `external.enabled: true`.
+3. Generate a plan (e.g., via `/quick/account-plan`) and note that insights/opportunities/risks incorporate “External Signals (News/Market)”.
+
+## Account Plan Metadata
+
+- Plans include `metadata.dataSources`, summarizing which sections were populated and from which sources (e.g., `sample_emails`, `klavis_calendar`, `news_api`) to clearly demonstrate data flow and enrichment.
+
 ## Configuration
 
 The system supports multiple configuration options through environment variables:
