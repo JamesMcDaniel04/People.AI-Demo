@@ -1,0 +1,11 @@
+fromId,toId,relationship_type,strength,last_interaction,notes
+STK001,STK002,COLLABORATES_WITH,0.95,2024-01-15,Weekly technical discussions
+STK001,STK003,WORKS_WITH,0.78,2024-01-12,Product roadmap alignment
+STK004,STK005,MANAGES,0.92,2024-01-16,Direct reporting relationship
+STK006,STK007,COLLABORATES_WITH,0.84,2024-01-14,ML project collaboration
+STK008,STK009,PARTNERS_WITH,0.76,2024-01-13,Cross-functional initiatives
+STK001,STK006,INFLUENCES,0.82,2024-01-10,Technical architecture discussions
+STK004,STK006,COLLABORATES_WITH,0.87,2024-01-11,Data platform integration
+STK008,STK010,MENTORS,0.73,2024-01-09,Design leadership guidance
+STK002,STK006,TECHNICAL_ADVISOR,0.89,2024-01-08,Infrastructure consultation
+STK005,STK007,COLLABORATES_WITH,0.81,2024-01-07,Analytics and ML alignment

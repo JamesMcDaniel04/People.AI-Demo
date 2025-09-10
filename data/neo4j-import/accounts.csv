@@ -1,0 +1,11 @@
+accountId,name,industry,revenue,employees,tier,health_score,region
+ACC001,Stripe,Financial Services,7500000000,4000,Enterprise,0.85,North America
+ACC002,Snowflake,Data & Analytics,2100000000,6000,Enterprise,0.78,North America
+ACC003,Databricks,Machine Learning,1800000000,5000,Enterprise,0.92,North America
+ACC004,Figma,Design & Collaboration,400000000,800,Growth,0.88,North America
+ACC005,Notion,Productivity Software,1000000000,450,Growth,0.73,North America
+ACC006,Canva,Design & Media,15000000000,4000,Enterprise,0.95,Asia Pacific
+ACC007,Atlassian,Software Development,3300000000,8813,Enterprise,0.82,Asia Pacific
+ACC008,Shopify,E-commerce,5600000000,12000,Enterprise,0.76,North America
+ACC009,Zoom,Video Communications,4100000000,7400,Enterprise,0.69,North America
+ACC010,DocuSign,Digital Transaction,2400000000,7500,Enterprise,0.87,North America

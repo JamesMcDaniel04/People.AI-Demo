@@ -1,0 +1,11 @@
+stakeholderId,accountId,name,role,email,engagement_score,influence_level,department
+STK001,ACC001,Sarah Chen,Chief Technology Officer,sarah.chen@stripe.com,0.92,High,Engineering
+STK002,ACC001,Marcus Johnson,VP of Engineering,marcus.johnson@stripe.com,0.88,High,Engineering
+STK003,ACC001,Emily Rodriguez,Product Manager,emily.rodriguez@stripe.com,0.75,Medium,Product
+STK004,ACC002,David Kim,Chief Data Officer,david.kim@snowflake.com,0.95,High,Data
+STK005,ACC002,Lisa Wang,VP of Analytics,lisa.wang@snowflake.com,0.83,High,Data
+STK006,ACC003,James Thompson,ML Engineering Lead,james.thompson@databricks.com,0.89,High,Engineering
+STK007,ACC003,Priya Patel,Data Scientist,priya.patel@databricks.com,0.77,Medium,Data Science
+STK008,ACC004,Alex Morgan,Design Director,alex.morgan@figma.com,0.91,High,Design
+STK009,ACC005,Rachel Green,Product Operations,rachel.green@notion.so,0.72,Medium,Product
+STK010,ACC006,Tom Wilson,Creative Director,tom.wilson@canva.com,0.86,High,Creative

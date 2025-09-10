@@ -92,6 +92,7 @@ Thumbs.db
 
 # Data files (if storing sensitive data locally)
 data/
+!data/neo4j-import/
 backups/
 exports/
 
