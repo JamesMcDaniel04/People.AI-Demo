@@ -22,7 +22,7 @@ class PineconeService:
         self.openai_client = None
         self.api_key = os.getenv("PINECONE_API_KEY")
         self.environment = os.getenv("PINECONE_ENVIRONMENT", "us-east-1-aws")
-        self.index_name = "people-ai-demo"
+        self.index_name = os.getenv("PINECONE_INDEX_NAME", "people-ai-demo")
         self.dimension = 1536  # OpenAI ada-002 embedding dimension
         self.initialized = False
         
