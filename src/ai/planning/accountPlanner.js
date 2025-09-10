@@ -1,5 +1,6 @@
 import { DataAnalyzer } from '../analysis/dataAnalyzer.js';
 import { RecommendationEngine } from './recommendationEngine.js';
+import { GraphRAGService } from '../../services/graphRAGService.js';
 
 export class AccountPlannerApp {
   constructor(dataManager, config) {
@@ -9,30 +10,49 @@ export class AccountPlannerApp {
     const klavisProvider = dataManager.getKlavisProvider();
     this.analyzer = new DataAnalyzer(config, klavisProvider);
     this.recommendationEngine = new RecommendationEngine(config, klavisProvider);
+    
+    // Initialize GraphRAG Service
+    this.graphRAG = new GraphRAGService(config);
+    this.graphRAGInitialized = false;
   }
 
   async generateAccountPlan(accountName) {
     console.log(`📋 Generating account plan for ${accountName}...`);
     
     try {
-      // Step 1: Gather all account data
+      // Step 1: Initialize GraphRAG if not already done
+      if (!this.graphRAGInitialized) {
+        await this.graphRAG.initialize();
+        this.graphRAGInitialized = true;
+      }
+      
+      // Step 2: Gather all account data
       const accountData = await this.dataManager.getAccountData(accountName);
       
-      // Step 2: Analyze the data
-      const analysis = await this.analyzer.analyzeAccountData(accountData);
-      
-      // Step 3: Generate recommendations
-      const recommendations = await this.recommendationEngine.generateRecommendations(
-        accountData, 
-        analysis
+      // Step 3: Process data through GraphRAG for enhanced insights
+      console.log(`🧠 Processing ${accountName} through GraphRAG...`);
+      const graphRAGResults = await this.graphRAG.generateAccountPlanningInsights(
+        accountName, 
+        accountData
       );
       
-      // Step 4: Create comprehensive account plan
+      // Step 4: Analyze the data (enhanced with GraphRAG insights)
+      const analysis = await this.analyzer.analyzeAccountData(accountData, graphRAGResults);
+      
+      // Step 5: Generate recommendations (enhanced with GraphRAG context)
+      const recommendations = await this.recommendationEngine.generateRecommendations(
+        accountData, 
+        analysis,
+        graphRAGResults
+      );
+      
+      // Step 6: Create comprehensive account plan with GraphRAG insights
       const accountPlan = await this.createAccountPlan(
         accountName,
         accountData,
         analysis,
-        recommendations
+        recommendations,
+        graphRAGResults
       );
       
       return accountPlan;
@@ -43,7 +63,7 @@ export class AccountPlannerApp {
     }
   }
 
-  async createAccountPlan(accountName, accountData, analysis, recommendations) {
+  async createAccountPlan(accountName, accountData, analysis, recommendations, graphRAGResults = null) {
     const dataSources = this.summarizeDataSources(accountData);
     const plan = {
       metadata: {
@@ -51,11 +71,39 @@ export class AccountPlannerApp {
         generatedDate: new Date().toISOString(),
         planPeriod: 'Q2-Q4 2024',
         lastUpdated: new Date().toISOString(),
-        version: '1.0',
-        dataSources
+        version: '1.1',
+        dataSources,
+        graphRAG: graphRAGResults?.metadata || { enabled: false }
       },
       
-      executiveSummary: this.generateExecutiveSummary(accountData, analysis),
+      executiveSummary: this.generateExecutiveSummary(accountData, analysis, graphRAGResults),
+      
+      dataSources: {
+        coreGTMData: dataSources.dataSourcesBreakdown.coreGTM,
+        externalEnrichment: dataSources.dataSourcesBreakdown.external,
+        mcpLiveData: dataSources.dataSourcesBreakdown.mcpLive,
+        graphRAG: {
+          title: "Graph RAG Intelligence",
+          enabled: !!graphRAGResults,
+          entityCount: graphRAGResults?.graphData?.graphStats?.total_nodes || 0,
+          relationshipCount: graphRAGResults?.graphData?.graphStats?.total_relationships || 0,
+          insightCategories: graphRAGResults?.insights ? Object.keys(graphRAGResults.insights).length : 0,
+          processingTime: graphRAGResults?.metadata?.processingTime || 0,
+          total: (graphRAGResults?.graphData?.graphStats?.total_nodes || 0) + 
+                 (graphRAGResults?.graphData?.graphStats?.total_relationships || 0)
+        },
+        summary: {
+          totalSources: dataSources.sources.length + (graphRAGResults ? 1 : 0),
+          totalDataPoints: dataSources.dataSourcesBreakdown.coreGTM.total + 
+                          dataSources.dataSourcesBreakdown.external.total + 
+                          dataSources.dataSourcesBreakdown.mcpLive.total +
+                          (graphRAGResults?.graphData?.graphStats?.total_nodes || 0),
+          enrichmentLevel: graphRAGResults ? 'GraphRAG Enhanced' : 
+                          (dataSources.dataSourcesBreakdown.external.total > 0 ? 'Enhanced' : 'Standard'),
+          liveDataEnabled: dataSources.dataSourcesBreakdown.mcpLive.isLive,
+          graphRAGEnabled: !!graphRAGResults
+        }
+      },
       
       accountOverview: {
         currentStatus: await this.generateCurrentStatus(accountData, analysis),
@@ -83,6 +131,17 @@ export class AccountPlannerApp {
         shortTerm: recommendations.shortTerm,
         longTerm: recommendations.longTerm,
         resourceRequirements: recommendations.resources
+      },
+      
+      graphRAGInsights: {
+        enabled: !!graphRAGResults,
+        summary: graphRAGResults?.summary || 'GraphRAG analysis not available',
+        categorizedInsights: graphRAGResults?.insights || {},
+        graphStatistics: graphRAGResults?.graphData?.graphStats || {},
+        processingMetadata: graphRAGResults?.metadata || {},
+        keyFindings: this.extractGraphRAGKeyFindings(graphRAGResults),
+        crossSourceCorrelations: this.identifyCorrelations(graphRAGResults),
+        communityInsights: this.summarizeCommunityPatterns(graphRAGResults)
       },
       
       riskAssessment: {
@@ -119,9 +178,82 @@ export class AccountPlannerApp {
       summary.bySection[key] = { sources: arr.map(s => s.source), count: total };
       arr.forEach(s => summary.sourcesPresent.add(s.source));
     }
+
+    // Enhanced data sources breakdown for demo visibility
+    const coreGTMData = {
+      emails: summary.bySection.emails?.count || 0,
+      calls: summary.bySection.calls?.count || 0,
+      stakeholders: summary.bySection.stakeholders?.count || 0,
+      interactions: summary.bySection.interactions?.count || 0
+    };
+
+    const externalEnrichment = {
+      newsItems: 0,
+      financialSignals: 0,
+      socialMentions: 0,
+      marketData: 0
+    };
+
+    const mcpLiveData = {
+      calendarEvents: summary.bySection.calendar?.count || 0,
+      documentUpdates: summary.bySection.documents?.count || 0,
+      slackMentions: 0,
+      crmRecords: summary.bySection.crm?.count || 0
+    };
+
+    // Parse external data sources
+    if (accountData.external && Array.isArray(accountData.external)) {
+      accountData.external.forEach(source => {
+        if (source.source === 'news_api' && source.data?.news) {
+          externalEnrichment.newsItems = source.data.news.length;
+        }
+        if (source.source === 'financial_api' && source.data?.signals) {
+          externalEnrichment.financialSignals = source.data.signals.length;
+        }
+        if (source.source === 'social_api' && source.data?.mentions) {
+          externalEnrichment.socialMentions = source.data.mentions.length;
+        }
+      });
+    }
+
+    // Parse MCP data sources for live data indicators
+    const klavisSources = Array.from(summary.sourcesPresent).filter(s => s.includes('klavis'));
+    if (klavisSources.length > 0) {
+      // If using Klavis MCP, data is live
+      mcpLiveData.isLive = true;
+    }
+
     return {
       sources: Array.from(summary.sourcesPresent),
-      sections: summary.bySection
+      sections: summary.bySection,
+      // Enhanced breakdown for demo presentation
+      dataSourcesBreakdown: {
+        coreGTM: {
+          title: "Core GTM Data",
+          emails: coreGTMData.emails,
+          calls: coreGTMData.calls,
+          stakeholders: coreGTMData.stakeholders,
+          interactions: coreGTMData.interactions,
+          total: coreGTMData.emails + coreGTMData.calls + coreGTMData.stakeholders + coreGTMData.interactions
+        },
+        external: {
+          title: "External Enrichment",
+          newsItems: externalEnrichment.newsItems,
+          financialSignals: externalEnrichment.financialSignals,
+          socialMentions: externalEnrichment.socialMentions,
+          marketData: externalEnrichment.marketData,
+          total: externalEnrichment.newsItems + externalEnrichment.financialSignals + externalEnrichment.socialMentions + externalEnrichment.marketData
+        },
+        mcpLive: {
+          title: "MCP Live Data",
+          calendarEvents: mcpLiveData.calendarEvents,
+          documentUpdates: mcpLiveData.documentUpdates,
+          slackMentions: mcpLiveData.slackMentions,
+          crmRecords: mcpLiveData.crmRecords,
+          isLive: mcpLiveData.isLive || false,
+          total: mcpLiveData.calendarEvents + mcpLiveData.documentUpdates + mcpLiveData.slackMentions + mcpLiveData.crmRecords
+        }
+      }
     };
   }
 
@@ -510,5 +642,151 @@ export class AccountPlannerApp {
         .map(interaction => new Date(interaction.date).getTime())
     );
     return new Date(latest).toISOString();
+  }
+
+  // GraphRAG Analysis Helper Methods
+  extractGraphRAGKeyFindings(graphRAGResults) {
+    if (!graphRAGResults || !graphRAGResults.insights) {
+      return ['GraphRAG analysis not available'];
+    }
+
+    const findings = [];
+    
+    // Extract top insights from each category
+    Object.entries(graphRAGResults.insights).forEach(([category, insights]) => {
+      if (insights && insights.length > 0) {
+        const topInsight = insights.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+        if (topInsight.summary) {
+          findings.push(`${category.replace('_', ' ').toUpperCase()}: ${topInsight.summary}`);
+        }
+      }
+    });
+
+    return findings.length > 0 ? findings.slice(0, 5) : ['No significant GraphRAG findings identified'];
+  }
+
+  identifyCorrelations(graphRAGResults) {
+    if (!graphRAGResults || !graphRAGResults.insights) {
+      return {
+        crossSourceMatches: 0,
+        correlationStrength: 0,
+        examples: []
+      };
+    }
+
+    let crossSourceMatches = 0;
+    let correlationExamples = [];
+
+    // Look for cross-source correlation insights
+    Object.values(graphRAGResults.insights).flat().forEach(insight => {
+      if (insight.type === 'cross_source_correlation') {
+        crossSourceMatches += insight.evidence?.[0]?.correlation_strength || 0;
+        if (insight.summary) {
+          correlationExamples.push(insight.summary);
+        }
+      }
+    });
+
+    return {
+      crossSourceMatches,
+      correlationStrength: crossSourceMatches > 0 ? Math.min(crossSourceMatches * 0.2, 1.0) : 0,
+      examples: correlationExamples.slice(0, 3)
+    };
+  }
+
+  summarizeCommunityPatterns(graphRAGResults) {
+    if (!graphRAGResults || !graphRAGResults.insights) {
+      return {
+        communitiesIdentified: 0,
+        influencePatterns: [],
+        networkDensity: 'Unknown'
+      };
+    }
+
+    let communitiesCount = 0;
+    let influencePatterns = [];
+
+    // Extract community insights
+    Object.values(graphRAGResults.insights).flat().forEach(insight => {
+      if (insight.type === 'community_influence') {
+        communitiesCount++;
+        if (insight.summary) {
+          influencePatterns.push(insight.summary);
+        }
+      }
+    });
+
+    const networkDensity = this.calculateNetworkDensity(graphRAGResults.graphData);
+
+    return {
+      communitiesIdentified: communitiesCount,
+      influencePatterns: influencePatterns.slice(0, 3),
+      networkDensity
+    };
+  }
+
+  calculateNetworkDensity(graphData) {
+    if (!graphData?.graphStats) return 'Unknown';
+    
+    const nodes = graphData.graphStats.total_nodes || 0;
+    const relationships = graphData.graphStats.total_relationships || 0;
+    
+    if (nodes < 2) return 'Insufficient data';
+    
+    const maxPossibleEdges = nodes * (nodes - 1) / 2;
+    const density = maxPossibleEdges > 0 ? relationships / maxPossibleEdges : 0;
+    
+    if (density > 0.7) return 'High';
+    if (density > 0.4) return 'Medium';
+    if (density > 0.1) return 'Low';
+    return 'Very Low';
+  }
+
+  // Enhanced Executive Summary with GraphRAG insights
+  generateExecutiveSummary(accountData, analysis, graphRAGResults = null) {
+    const basic = accountData.basic?.data || { name: 'Unknown Account' };
+    const healthStatus = analysis.healthScore?.overall || 'unknown';
+    const opportunityCount = analysis.opportunities?.length || 0;
+    const totalValue = this.calculateTotalOpportunityValue(analysis.opportunities);
+    
+    // Base summary
+    let summary = {
+      overview: `${basic.name} is a ${basic.tier || 'enterprise'} account in ${basic.industry || 'technology'} sector with ${healthStatus} health status.`,
+      keyHighlights: [
+        `Account health score: ${analysis.healthScore?.score || 'N/A'}/100`,
+        `${opportunityCount} growth opportunities identified`,
+        `Total opportunity value: $${totalValue.toLocaleString()}`,
+        `Risk level: ${analysis.risks?.length || 0} identified risks`
+      ],
+      nextActions: [
+        'Review stakeholder engagement strategy',
+        'Address identified risks',
+        'Pursue high-priority opportunities',
+        'Monitor account health metrics'
+      ]
+    };
+
+    // Enhance with GraphRAG insights if available
+    if (graphRAGResults && graphRAGResults.summary) {
+      summary.graphRAGEnhancement = {
+        enabled: true,
+        summary: graphRAGResults.summary,
+        keyInsights: this.extractGraphRAGKeyFindings(graphRAGResults).slice(0, 3),
+        processingTime: graphRAGResults.metadata?.processingTime || 0
+      };
+      
+      // Add GraphRAG-specific highlights
+      const correlations = this.identifyCorrelations(graphRAGResults);
+      if (correlations.crossSourceMatches > 0) {
+        summary.keyHighlights.push(`${correlations.crossSourceMatches} cross-source correlations identified`);
+      }
+      
+      const communities = this.summarizeCommunityPatterns(graphRAGResults);
+      if (communities.communitiesIdentified > 0) {
+        summary.keyHighlights.push(`${communities.communitiesIdentified} stakeholder communities detected`);
+      }
+    }
+
+    return summary;
   }
 }

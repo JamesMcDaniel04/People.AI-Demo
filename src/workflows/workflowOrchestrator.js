@@ -6,7 +6,7 @@ import { CRMDistributor } from './distributors/crmDistributor.js';
 import { N8nService } from './services/n8nService.js';
 import { KlavisN8nBridge } from './services/klavisN8nBridge.js';
 import { Logger } from '../utils/logger.js';
-import { CronJob } from 'cron';
+import { JobQueueService } from '../services/jobQueueService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowOrchestrator {
@@ -15,6 +15,9 @@ export class WorkflowOrchestrator {
     this.logger = new Logger(config);
     this.workflows = new Map();
     this.activeJobs = new Map();
+    
+    // Initialize job queue service
+    this.jobQueueService = new JobQueueService(config, this);
     
     // Initialize distributors
     this.distributors = {
@@ -50,6 +53,12 @@ export class WorkflowOrchestrator {
         this.distributors.slack.initialize(), 
         this.distributors.crm.initialize()
       ]);
+
+      // Initialize job queue service
+      const jobQueueInitialized = await this.jobQueueService.initialize();
+      if (!jobQueueInitialized) {
+        this.logger.warn('⚠️ Job queue service failed to initialize, falling back to in-memory scheduling');
+      }
 
       // Initialize n8n service if enabled
       if (this.n8nEnabled) {
@@ -126,7 +135,7 @@ export class WorkflowOrchestrator {
     
     // Schedule if it's a cron workflow and using internal engine
     if (workflow.engine === 'internal' && workflow.trigger.type === 'schedule' && workflow.schedule) {
-      this.scheduleWorkflow(workflowId);
+      await this.scheduleWorkflow(workflowId);
     }
     
     this.logger.info('✅ Workflow created', { 
@@ -137,27 +146,99 @@ export class WorkflowOrchestrator {
     return workflow;
   }
 
-  // Schedule a workflow with cron
-  scheduleWorkflow(workflowId) {
+  // Schedule a workflow using BullMQ
+  async scheduleWorkflow(workflowId) {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       throw new Error(`Workflow ${workflowId} not found`);
     }
 
-    if (this.activeJobs.has(workflowId)) {
-      this.activeJobs.get(workflowId).destroy();
+    try {
+      // Use BullMQ if available, fallback to CronJob
+      if (this.jobQueueService.isEnabled()) {
+        const job = await this.jobQueueService.scheduleWorkflow(
+          {
+            id: workflowId,
+            name: workflow.name,
+            accounts: workflow.accounts,
+            distributors: workflow.distributors
+          },
+          workflow.schedule,
+          {
+            workflowId,
+            trigger: 'scheduled'
+          }
+        );
+        
+        this.activeJobs.set(workflowId, { type: 'bullmq', job });
+        this.logger.info('📅 Workflow scheduled with BullMQ', { 
+          workflowId, 
+          schedule: workflow.schedule,
+          jobId: job.id
+        });
+      } else {
+        // Fallback to CronJob for backward compatibility
+        const { CronJob } = await import('cron');
+        
+        if (this.activeJobs.has(workflowId)) {
+          const existingJob = this.activeJobs.get(workflowId);
+          if (existingJob.type === 'cron') {
+            existingJob.job.destroy();
+          }
+        }
+
+        const job = new CronJob(
+          workflow.schedule,
+          () => this.executeWorkflow(workflowId),
+          null,
+          workflow.enabled,
+          'UTC'
+        );
+
+        this.activeJobs.set(workflowId, { type: 'cron', job });
+        this.logger.info('📅 Workflow scheduled with CronJob (fallback)', { 
+          workflowId, 
+          schedule: workflow.schedule 
+        });
+      }
+    } catch (error) {
+      this.logger.error('❌ Failed to schedule workflow', {
+        workflowId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  // Unschedule a workflow
+  async unscheduleWorkflow(workflowId) {
+    const activeJob = this.activeJobs.get(workflowId);
+    if (!activeJob) {
+      return false;
     }
 
-    const job = new CronJob(
-      workflow.schedule,
-      () => this.executeWorkflow(workflowId),
-      null,
-      workflow.enabled,
-      'UTC'
-    );
+    try {
+      if (activeJob.type === 'bullmq') {
+        // Remove from BullMQ
+        const workflow = this.workflows.get(workflowId);
+        if (workflow && workflow.name) {
+          await this.jobQueueService.removeScheduledWorkflow(workflow.name);
+        }
+      } else if (activeJob.type === 'cron') {
+        // Stop CronJob
+        activeJob.job.destroy();
+      }
 
-    this.activeJobs.set(workflowId, job);
-    this.logger.info('📅 Workflow scheduled', { workflowId, schedule: workflow.schedule });
+      this.activeJobs.delete(workflowId);
+      this.logger.info('⏹️ Workflow unscheduled', { workflowId });
+      return true;
+    } catch (error) {
+      this.logger.error('❌ Failed to unschedule workflow', {
+        workflowId,
+        error: error.message
+      });
+      return false;
+    }
   }
 
   // Execute a workflow
@@ -453,7 +534,7 @@ export class WorkflowOrchestrator {
   }
 
   // Enable/disable workflow
-  toggleWorkflow(workflowId, enabled) {
+  async toggleWorkflow(workflowId, enabled) {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       throw new Error(`Workflow ${workflowId} not found`);
@@ -463,13 +544,9 @@ export class WorkflowOrchestrator {
 
     if (workflow.trigger.type === 'schedule' && workflow.schedule) {
       if (enabled) {
-        this.scheduleWorkflow(workflowId);
+        await this.scheduleWorkflow(workflowId);
       } else {
-        const job = this.activeJobs.get(workflowId);
-        if (job) {
-          job.destroy();
-          this.activeJobs.delete(workflowId);
-        }
+        await this.unscheduleWorkflow(workflowId);
       }
     }
 
@@ -478,18 +555,14 @@ export class WorkflowOrchestrator {
   }
 
   // Delete workflow
-  deleteWorkflow(workflowId) {
+  async deleteWorkflow(workflowId) {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       throw new Error(`Workflow ${workflowId} not found`);
     }
 
     // Stop scheduled job if exists
-    const job = this.activeJobs.get(workflowId);
-    if (job) {
-      job.destroy();
-      this.activeJobs.delete(workflowId);
-    }
+    await this.unscheduleWorkflow(workflowId);
 
     this.workflows.delete(workflowId);
     this.logger.info('🗑️ Workflow deleted', { workflowId });
@@ -673,12 +746,17 @@ export class WorkflowOrchestrator {
     this.logger.info('🛑 Shutting down Workflow Orchestrator...');
     
     // Stop all active jobs
-    for (const [workflowId, job] of this.activeJobs.entries()) {
-      job.destroy();
+    for (const [workflowId] of this.activeJobs.entries()) {
+      await this.unscheduleWorkflow(workflowId);
       this.logger.info('⏹️ Stopped workflow job', { workflowId });
     }
     
     this.activeJobs.clear();
+    
+    // Shutdown job queue service
+    if (this.jobQueueService) {
+      await this.jobQueueService.shutdown();
+    }
 
     // Shutdown n8n service and bridge
     if (this.n8nEnabled) {

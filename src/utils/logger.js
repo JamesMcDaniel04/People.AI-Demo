@@ -2,12 +2,13 @@ import fs from 'fs';
 import path from 'path';
 
 export class Logger {
-  constructor(config) {
+  constructor(config = {}) {
     this.config = config;
-    this.level = config.logging.level || 'info';
-    this.enableConsole = config.logging.enableConsole;
-    this.enableFile = config.logging.enableFile;
-    this.filePath = config.logging.filePath;
+    const logging = config.logging || {};
+    this.level = logging.level || 'info';
+    this.enableConsole = logging.enableConsole !== false;
+    this.enableFile = logging.enableFile || false;
+    this.filePath = logging.filePath || './logs/app.log';
     
     // Ensure log directory exists
     if (this.enableFile && this.filePath) {

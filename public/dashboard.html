@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Account Planner - Demo Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <i class="fas fa-brain"></i>
+                    <h1>AI Account Planner</h1>
+                    <span class="version">v1.0.0</span>
+                </div>
+                <div class="system-status" id="systemStatus">
+                    <div class="status-indicator" id="statusIndicator">
+                        <i class="fas fa-circle"></i>
+                        <span id="statusText">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Navigation Tabs -->
+            <nav class="dashboard-tabs">
+                <button class="tab-button active" data-tab="demo">Demo</button>
+                <button class="tab-button" data-tab="system">System</button>
+                <button class="tab-button" data-tab="queues">Queues</button>
+                <button class="tab-button" data-tab="workflows">Workflows</button>
+                <button class="tab-button" data-tab="integration">Integration</button>
+            </nav>
+
+            <!-- Demo Tab -->
+            <div class="tab-content active" id="demo-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-rocket"></i> Account Plan Demo</h2>
+                        <p>Generate AI-powered account plans for demonstration</p>
+                    </div>
+                    
+                    <div class="demo-controls">
+                        <div class="input-group">
+                            <label for="accountName">Account Name:</label>
+                            <select id="accountName">
+                                <option value="Stripe">Stripe</option>
+                                <option value="TechCorp">TechCorp</option>
+                                <option value="RetailPlus">RetailPlus</option>
+                                <option value="FinanceFlow">FinanceFlow</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="emailRecipients">Email Recipients:</label>
+                            <input type="email" id="emailRecipients" value="demo@example.com" placeholder="demo@example.com">
+                        </div>
+                        <button id="generatePlanBtn" class="primary-button">
+                            <i class="fas fa-magic"></i> Generate Account Plan
+                        </button>
+                    </div>
+
+                    <div class="demo-results" id="demoResults">
+                        <!-- Results will appear here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Tab -->
+            <div class="tab-content" id="system-tab">
+                <div class="system-grid">
+                    <div class="system-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-heartbeat"></i> System Health</h3>
+                            <button class="refresh-btn" data-endpoint="/health">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-content" id="healthContent">
+                            <div class="loading">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div class="system-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-plug"></i> Integration Status</h3>
+                            <button class="refresh-btn" data-endpoint="/integration/status">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-content" id="integrationContent">
+                            <div class="loading">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queues Tab -->
+            <div class="tab-content" id="queues-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-tasks"></i> Job Queue Management</h2>
+                        <div class="header-actions">
+                            <button class="secondary-button" onclick="window.open('/admin/queues', '_blank')">
+                                <i class="fas fa-external-link-alt"></i> Bull Board Dashboard
+                            </button>
+                            <button class="refresh-btn" data-endpoint="/queue/stats">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="queue-stats" id="queueStats">
+                        <div class="loading">Loading queue statistics...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflows Tab -->
+            <div class="tab-content" id="workflows-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-sitemap"></i> Workflow Management</h2>
+                        <button id="createWorkflowBtn" class="primary-button">
+                            <i class="fas fa-plus"></i> Create Workflow
+                        </button>
+                    </div>
+                    
+                    <div class="workflows-list" id="workflowsList">
+                        <div class="loading">Loading workflows...</div>
+                    </div>
+                </div>
+
+                <!-- Create Workflow Modal -->
+                <div class="modal" id="createWorkflowModal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Create New Workflow</h3>
+                            <button class="close-modal">&times;</button>
+                        </div>
+                        <form id="createWorkflowForm">
+                            <div class="form-group">
+                                <label>Workflow Name:</label>
+                                <input type="text" id="workflowName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Description:</label>
+                                <textarea id="workflowDescription"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule (Cron):</label>
+                                <input type="text" id="workflowSchedule" placeholder="0 9 * * *" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Account Name:</label>
+                                <input type="text" id="workflowAccount" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="secondary-button cancel-btn">Cancel</button>
+                                <button type="submit" class="primary-button">Create Workflow</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Integration Tab -->
+            <div class="tab-content" id="integration-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-puzzle-piece"></i> External Integrations</h2>
+                        <p>Manage connections to external data sources</p>
+                    </div>
+                    
+                    <div class="integration-status" id="integrationDetails">
+                        <div class="loading">Loading integration details...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                <p>&copy; 2025 AI Account Planner - Demo Technical Exercise</p>
+                <div class="footer-links">
+                    <span>Powered by BullMQ + Redis + Mixed AI Models</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Processing...</p>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

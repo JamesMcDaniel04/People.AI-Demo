@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Account Planner - Demo Interface</title>
+    <link rel="stylesheet" href="/static/css/demo.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="demo-container">
+        <header class="demo-header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-brain"></i>
+                    <h1>AI Account Planner</h1>
+                </div>
+                <div class="status-indicator" id="systemStatus">
+                    <i class="fas fa-circle"></i>
+                    <span>System Ready</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="demo-main">
+            <!-- Configuration Panel -->
+            <section class="config-panel">
+                <h2><i class="fas fa-cog"></i> Workflow Configuration</h2>
+                
+                <div class="config-grid">
+                    <div class="config-group">
+                        <label for="accountSelect">Account Selection</label>
+                        <select id="accountSelect" class="config-input">
+                            <option value="Stripe">Stripe (Recommended)</option>
+                            <option value="Acme Retail">Acme Retail</option>
+                            <option value="NorthStar Logistics">NorthStar Logistics</option>
+                            <option value="TechForward Solutions">TechForward Solutions</option>
+                            <option value="GlobalCorp Industries">GlobalCorp Industries</option>
+                        </select>
+                    </div>
+
+                    <div class="config-group">
+                        <label for="templateSelect">Email Template</label>
+                        <select id="templateSelect" class="config-input">
+                            <option value="default">Default (Complete Plan)</option>
+                            <option value="executive">Executive Summary</option>
+                            <option value="detailed">Detailed Analysis</option>
+                            <option value="summary">Quick Summary</option>
+                        </select>
+                    </div>
+
+                    <div class="config-group">
+                        <label for="recipientsList">Recipients (one per line)</label>
+                        <textarea id="recipientsList" class="config-input" rows="3" placeholder="demo@example.com&#10;manager@company.com&#10;executive@company.com">demo@example.com
+hello@joinfloor.app</textarea>
+                    </div>
+
+                    <div class="config-group">
+                        <label for="customSubject">Custom Subject (optional)</label>
+                        <input type="text" id="customSubject" class="config-input" placeholder="[DEMO] Account Plan: {accountName}">
+                    </div>
+                </div>
+
+                <div class="config-actions">
+                    <button id="validateBtn" class="btn btn-secondary">
+                        <i class="fas fa-check-circle"></i> Validate Configuration
+                    </button>
+                    <button id="executeBtn" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Execute Workflow
+                    </button>
+                </div>
+            </section>
+
+            <!-- Execution Monitor -->
+            <section class="execution-panel" id="executionPanel" style="display: none;">
+                <h2><i class="fas fa-tasks"></i> Workflow Execution</h2>
+                
+                <div class="execution-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Ready to start...</div>
+                </div>
+
+                <div class="execution-steps" id="executionSteps">
+                    <!-- Steps will be populated dynamically -->
+                </div>
+
+                <div class="execution-results" id="executionResults" style="display: none;">
+                    <!-- Results will be populated dynamically -->
+                </div>
+            </section>
+
+            <!-- System Status & Capabilities -->
+            <section class="status-panel">
+                <h2><i class="fas fa-server"></i> System Status</h2>
+                
+                <div class="status-grid">
+                    <div class="status-card" id="aiStatus">
+                        <div class="status-icon"><i class="fas fa-robot"></i></div>
+                        <div class="status-info">
+                            <h3>AI Services</h3>
+                            <p class="status-value" id="aiStatusValue">Checking...</p>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="dataStatus">
+                        <div class="status-icon"><i class="fas fa-database"></i></div>
+                        <div class="status-info">
+                            <h3>Data Integration</h3>
+                            <p class="status-value" id="dataStatusValue">Checking...</p>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="emailStatus">
+                        <div class="status-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="status-info">
+                            <h3>Email Distribution</h3>
+                            <p class="status-value" id="emailStatusValue">Checking...</p>
+                        </div>
+                    </div>
+
+                    <div class="status-card" id="workflowStatus">
+                        <div class="status-icon"><i class="fas fa-cogs"></i></div>
+                        <div class="status-info">
+                            <h3>Workflow Engine</h3>
+                            <p class="status-value" id="workflowStatusValue">Checking...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Handling Display -->
+            <section class="error-panel" id="errorPanel" style="display: none;">
+                <h2><i class="fas fa-exclamation-triangle"></i> Error Details</h2>
+                <div class="error-content" id="errorContent"></div>
+                <div class="error-actions">
+                    <button id="retryBtn" class="btn btn-warning">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                    <button id="clearErrorBtn" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+            </section>
+
+            <!-- Live Logs -->
+            <section class="logs-panel">
+                <div class="logs-header">
+                    <h2><i class="fas fa-terminal"></i> Live Execution Log</h2>
+                    <button id="clearLogsBtn" class="btn btn-small">Clear</button>
+                </div>
+                <div class="logs-content" id="logsContent">
+                    <div class="log-entry info">
+                        <span class="log-time">[READY]</span>
+                        <span class="log-message">AI Account Planner Demo Interface loaded successfully</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/demo.js"></script>
+</body>
+</html>

@@ -1,44 +1,48 @@
-import nodemailer from 'nodemailer';
+import axios from 'axios';
 import { Logger } from '../../utils/logger.js';
 
 export class EmailDistributor {
   constructor(config) {
     this.config = config;
     this.logger = new Logger(config);
-    this.transporter = null;
+    this.postmarkApiKey = null;
+    this.postmarkBaseUrl = 'https://api.postmarkapp.com';
+    this.fromEmail = null;
+    this.mockMode = false;
   }
 
   async initialize() {
     this.logger.info('🔄 Initializing Email Distributor...');
 
-    // Skip SMTP verification for demo and use mock mode
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      this.logger.warn('⚠️ No SMTP credentials found, using mock mode');
+    // Check for Postmark API key
+    if (!process.env.SMTP_API_KEY) {
+      this.logger.warn('⚠️ No Postmark API key found, using mock mode');
       this.mockMode = true;
       return;
     }
 
-    // Configure email transporter based on environment
-    const emailConfig = {
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true' || false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    };
-
-    this.transporter = nodemailer.createTransport(emailConfig);
-
-    // Verify connection
+    // Configure Postmark API client
+    this.postmarkApiKey = process.env.SMTP_API_KEY;
+    this.fromEmail = process.env.SMTP_FROM || 'hello@joinfloor.app';
+    
+    // Test Postmark API connection
     try {
-      await this.transporter.verify();
-      this.logger.info('✅ Email Distributor initialized successfully');
+      const response = await axios.get(`${this.postmarkBaseUrl}/server`, {
+        headers: {
+          'Accept': 'application/json',
+          'X-Postmark-Server-Token': this.postmarkApiKey
+        }
+      });
+      
+      this.logger.info('✅ Email Distributor initialized successfully', {
+        provider: 'Postmark',
+        server: response.data.Name
+      });
     } catch (error) {
-      this.logger.warn('⚠️ Email verification failed, using mock mode', { error: error.message });
+      this.logger.warn('⚠️ Postmark API verification failed, using mock mode', { 
+        error: error.message 
+      });
       this.mockMode = true;
-      // Continue in mock mode for demonstration
     }
   }
 
@@ -89,37 +93,7 @@ export class EmailDistributor {
     const { accountName, executionId } = context;
 
     try {
-      const mailOptions = {
-        from: process.env.SMTP_FROM || 'AI Account Planner <noreply@yourdomain.com>',
-        to: recipient.email,
-        subject: subject,
-        html: content.html,
-        text: content.text,
-        attachments: [
-          {
-            filename: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
-            content: JSON.stringify(accountPlan, null, 2),
-            contentType: 'application/json'
-          }
-        ]
-      };
-
-      if (this.transporter) {
-        const info = await this.transporter.sendMail(mailOptions);
-        this.logger.info('✅ Email sent successfully', {
-          recipient: recipient.email,
-          messageId: info.messageId,
-          accountName,
-          executionId
-        });
-
-        return {
-          recipient: recipient.email,
-          status: 'sent',
-          messageId: info.messageId,
-          sentAt: new Date().toISOString()
-        };
-      } else {
+      if (this.mockMode) {
         // Mock mode for demonstration
         this.logger.info('📧 Email sent (mock mode)', {
           recipient: recipient.email,
@@ -136,17 +110,60 @@ export class EmailDistributor {
         };
       }
 
+      // Use Postmark HTTP API
+      const emailData = {
+        From: this.fromEmail,
+        To: recipient.email,
+        Subject: subject,
+        HtmlBody: content.html,
+        TextBody: content.text,
+        MessageStream: 'outbound',
+        Attachments: [
+          {
+            Name: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
+            Content: Buffer.from(JSON.stringify(accountPlan, null, 2)).toString('base64'),
+            ContentType: 'application/json'
+          }
+        ]
+      };
+
+      const response = await axios.post(`${this.postmarkBaseUrl}/email`, emailData, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Postmark-Server-Token': this.postmarkApiKey
+        }
+      });
+
+      this.logger.info('✅ Email sent successfully via Postmark', {
+        recipient: recipient.email,
+        messageId: response.data.MessageID,
+        accountName,
+        executionId
+      });
+
+      return {
+        recipient: recipient.email,
+        status: 'sent',
+        messageId: response.data.MessageID,
+        sentAt: new Date().toISOString(),
+        provider: 'Postmark'
+      };
+
     } catch (error) {
-      this.logger.error('❌ Failed to send email', {
+      this.logger.error('❌ Failed to send email via Postmark', {
         recipient: recipient.email,
         error: error.message,
+        errorCode: error.response?.data?.ErrorCode,
+        errorMessage: error.response?.data?.Message,
         accountName
       });
 
       return {
         recipient: recipient.email,
         status: 'failed',
-        error: error.message,
+        error: error.response?.data?.Message || error.message,
+        errorCode: error.response?.data?.ErrorCode,
         failedAt: new Date().toISOString()
       };
     }
@@ -263,7 +280,6 @@ export class EmailDistributor {
         </div>
 
         <div class="footer">
-            <a href="#" class="cta">View Full Account Plan</a><br>
             <small>Generated by AI Account Planner | Execution ID: ${context.executionId}</small><br>
             <small>This account plan includes comprehensive analysis and recommendations based on live data integration.</small>
         </div>
@@ -348,6 +364,11 @@ Execution ID: ${context.executionId}
     `;
 
     return { html, text: `Executive Brief: ${accountName}\n\n${summary.recommendation || ''}` };
+  }
+
+  generateDetailedTemplate(accountPlan, context) {
+    // Full detailed template - same as default for now
+    return this.generateDefaultTemplate(accountPlan, context);
   }
 
   generateSummaryTemplate(accountPlan, context) {

@@ -1,7 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { WorkflowOrchestrator } from '../workflows/workflowOrchestrator.js';
+import { createDemoAPI } from './demoAPI.js';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
+import { ExpressAdapter } from '@bull-board/express';
 
 export class WorkflowAPI {
   constructor(config) {
@@ -10,6 +16,7 @@ export class WorkflowAPI {
     this.app = express();
     this.orchestrator = new WorkflowOrchestrator(config);
     this.setupMiddleware();
+    this.setupBullBoard();
     this.setupRoutes();
   }
 
@@ -24,6 +31,11 @@ export class WorkflowAPI {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+    // Serve a simple static homepage for demo friendliness
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    this.app.use('/static', express.static(join(__dirname, '../../public')));
+
     // Request logging
     this.app.use((req, res, next) => {
       this.logger.info('API Request', {
@@ -36,31 +48,36 @@ export class WorkflowAPI {
     });
   }
 
+  setupBullBoard() {
+    // Initialize Bull Board for job monitoring
+    try {
+      const serverAdapter = new ExpressAdapter();
+      serverAdapter.setBasePath('/admin/queues');
+
+      this.bullBoard = createBullBoard({
+        queues: [], // Will be populated after orchestrator initialization
+        serverAdapter: serverAdapter,
+      });
+
+      this.app.use('/admin/queues', serverAdapter.getRouter());
+      
+      this.logger.info('🎯 Bull Board dashboard initialized at /admin/queues');
+    } catch (error) {
+      this.logger.warn('⚠️ Failed to initialize Bull Board dashboard', { error: error.message });
+    }
+  }
+
   setupRoutes() {
     // Health check
+    // Dashboard route (main interface)
     this.app.get('/', (req, res) => {
-      const port = process.env.WORKFLOW_PORT || 3001;
-      res.type('html').send(`
-        <!doctype html>
-        <html>
-        <head><meta charset="utf-8"><title>AI Account Planner API</title></head>
-        <body style="font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; padding: 20px;">
-          <h1>AI Account Planner API</h1>
-          <p>Server is running. Try these endpoints:</p>
-          <ul>
-            <li><a href="/health">/health</a></li>
-            <li><a href="/integration/status">/integration/status</a></li>
-            <li><a href="/templates">/templates</a> (GET)</li>
-          </ul>
-          <p>POST actions:</p>
-          <ul>
-            <li>POST <code>/quick/account-plan</code></li>
-          </ul>
-          <small>Port: ${port}</small>
-        </body>
-        </html>
-      `);
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      res.sendFile(join(__dirname, '../../public/dashboard.html'));
     });
+
+    // Simple ping
+    this.app.get('/__ping', (_req, res) => res.type('text/plain').send('pong'));
 
     // Quietly ignore favicon to prevent 404 in browser console
     this.app.get('/favicon.ico', (_req, res) => res.status(204).end());
@@ -101,12 +118,63 @@ export class WorkflowAPI {
     this.app.get('/templates', this.getWorkflowTemplates.bind(this));
     this.app.post('/templates/:templateId/create', this.createFromTemplate.bind(this));
 
+    // Job queue management routes
+    this.app.get('/queue/stats', this.getQueueStats.bind(this));
+    this.app.get('/queue/schedules', this.getAllSchedules.bind(this));
+    this.app.delete('/queue/schedules/:workflowName', this.removeSchedule.bind(this));
+
+    // Demo API routes
+    this.app.use('/api', createDemoAPI(this.orchestrator));
+
+    // robots.txt (avoid 404 noise in browsers/crawlers)
+    this.app.get('/robots.txt', (_req, res) => {
+      res.type('text/plain').send('User-agent: *\nDisallow: /');
+    });
+
+    // Catch-all for unknown GET routes: show index page instead of 404 for demo friendliness
+    this.app.get(/.*/, (req, res, next) => {
+      if (req.method !== 'GET') return next();
+      // Avoid shadowing API routes that start with /workflows, /quick, /templates, /integration, /health, /auth
+      if (/^(\/workflows|\/quick|\/templates|\/integration|\/health|\/auth|\/api\b)/.test(req.path)) return next();
+      const port = process.env.WORKFLOW_PORT || 3001;
+      res.type('html').send(`
+        <!doctype html>
+        <html>
+        <head><meta charset=\"utf-8\"><title>AI Account Planner API</title></head>
+        <body style=\"font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; padding: 20px;\">
+          <h1>AI Account Planner API</h1>
+          <p>Server is running. Try these endpoints:</p>
+          <ul>
+            <li><a href=\"/health\">/health</a></li>
+            <li><a href=\"/integration/status\">/integration/status</a></li>
+            <li><a href=\"/templates\">/templates</a> (GET)</li>
+          </ul>
+          <small>Port: ${port}</small>
+        </body>
+        </html>
+      `);
+    });
+
     // Error handling
     this.app.use(this.errorHandler.bind(this));
   }
 
   async initialize() {
     await this.orchestrator.initialize();
+    
+    // Add queues to Bull Board after orchestrator initialization
+    if (this.bullBoard && this.orchestrator.jobQueueService.isEnabled()) {
+      try {
+        const queues = this.orchestrator.jobQueueService.queues;
+        for (const [queueName, queue] of queues.entries()) {
+          this.bullBoard.addQueue(new BullMQAdapter(queue));
+          this.logger.info('📊 Added queue to Bull Board dashboard', { queueName });
+        }
+      } catch (error) {
+        this.logger.warn('⚠️ Failed to add queues to Bull Board', { error: error.message });
+      }
+    }
+    
     this.logger.info('✅ Workflow API initialized');
   }
 
@@ -631,6 +699,67 @@ export class WorkflowAPI {
       message: error.message,
       requestId: req.headers['x-request-id'] || 'unknown'
     });
+  }
+
+  // Job Queue Management Routes
+  async getQueueStats(req, res) {
+    try {
+      const stats = await this.orchestrator.jobQueueService.getQueueStats();
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      this.logger.error('Failed to get queue stats', { error: error.message });
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  async getAllSchedules(req, res) {
+    try {
+      const schedules = await this.orchestrator.jobQueueService.redisService.getAllSchedules();
+      res.json({
+        success: true,
+        data: schedules
+      });
+    } catch (error) {
+      this.logger.error('Failed to get schedules', { error: error.message });
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  async removeSchedule(req, res) {
+    try {
+      const { workflowName } = req.params;
+      const result = await this.orchestrator.jobQueueService.removeScheduledWorkflow(workflowName);
+      
+      if (result) {
+        res.json({
+          success: true,
+          message: `Schedule for ${workflowName} removed successfully`
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: `Schedule for ${workflowName} not found`
+        });
+      }
+    } catch (error) {
+      this.logger.error('Failed to remove schedule', { 
+        workflowName: req.params.workflowName, 
+        error: error.message 
+      });
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 
   async start(port = 3001) {
