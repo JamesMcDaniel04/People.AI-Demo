@@ -152,13 +152,13 @@ export class GraphService {
             MATCH (a:Account {name: $accountName})
             MERGE (s)-[:WORKS_AT]->(a)
           `, {
-            stakeholderId: this.generateId('STK', stakeholder.name),
-            name: stakeholder.name,
-            email: stakeholder.email,
-            role: stakeholder.role,
-            department: stakeholder.department,
+            stakeholderId: this.generateId('STK', stakeholder.name || 'Unknown'),
+            name: stakeholder.name || 'Unknown Stakeholder',
+            email: stakeholder.email || `${(stakeholder.name || 'unknown').toLowerCase().replace(/\s+/g, '.')}@${accountName.toLowerCase()}.com`,
+            role: stakeholder.role || 'Team Member',
+            department: stakeholder.department || 'General',
             influenceLevel: stakeholder.influence_level || 'Medium',
-            engagementScore: stakeholder.engagement_score || 0.5,
+            engagementScore: typeof stakeholder.engagement_score === 'number' ? stakeholder.engagement_score : 0.5,
             accountName: accountName
           });
         }
@@ -167,6 +167,18 @@ export class GraphService {
         const emails = accountData.emails?.[0]?.data || [];
         let emailCount = 0;
         for (const email of emails) {
+          // Safely handle email data and format date for Neo4j
+          let emailDate = email.date || new Date().toISOString();
+          // Ensure ISO 8601 format for Neo4j datetime()
+          if (emailDate && !emailDate.includes('T')) {
+            // Convert "YYYY-MM-DD HH:MM" format to ISO 8601
+            emailDate = emailDate.replace(' ', 'T') + ':00.000Z';
+          } else if (emailDate && !emailDate.endsWith('Z') && !emailDate.includes('+')) {
+            // Add timezone if missing
+            emailDate = emailDate.endsWith('Z') ? emailDate : emailDate + 'Z';
+          }
+          const emailSubject = email.subject || `Email ${emailCount + 1}`;
+          
           await tx.run(`
             MERGE (e:Email:Interaction {id: $emailId})
             SET e.subject = $subject,
@@ -189,11 +201,11 @@ export class GraphService {
             WHERE s.email = trim(recipient) OR s.email = $sender
             MERGE (e)-[:INVOLVES]->(s)
           `, {
-            emailId: this.generateId('EML', email.subject, emailCount++),
-            subject: email.subject,
-            sender: email.sender,
+            emailId: this.generateId('EML', emailSubject, emailCount++),
+            subject: emailSubject,
+            sender: email.sender || 'unknown@example.com',
             recipients: Array.isArray(email.recipients) ? email.recipients.join(',') : email.recipients || '',
-            date: email.date,
+            date: emailDate,
             sentiment: email.sentiment || 'neutral',
             topics: Array.isArray(email.topics) ? email.topics.join(',') : email.topics || '',
             summary: email.summary || '',
@@ -205,6 +217,18 @@ export class GraphService {
         const calls = accountData.calls?.[0]?.data || [];
         let callCount = 0;
         for (const call of calls) {
+          // Safely handle call data and format date for Neo4j
+          let callDate = call.date || new Date().toISOString();
+          // Ensure ISO 8601 format for Neo4j datetime()
+          if (callDate && !callDate.includes('T')) {
+            // Convert "YYYY-MM-DD HH:MM" format to ISO 8601
+            callDate = callDate.replace(' ', 'T') + ':00.000Z';
+          } else if (callDate && !callDate.endsWith('Z') && !callDate.includes('+')) {
+            // Add timezone if missing
+            callDate = callDate.endsWith('Z') ? callDate : callDate + 'Z';
+          }
+          const callSubject = call.subject || call.title || `Call ${callCount + 1}`;
+          
           await tx.run(`
             MERGE (c:Call:Interaction {id: $callId})
             SET c.subject = $subject,
@@ -228,11 +252,11 @@ export class GraphService {
             WHERE s.name CONTAINS trim(participant) OR s.email CONTAINS trim(participant)
             MERGE (c)-[:INVOLVES]->(s)
           `, {
-            callId: this.generateId('CAL', call.subject, callCount++),
-            subject: call.subject || call.title,
+            callId: this.generateId('CAL', callSubject, callCount++),
+            subject: callSubject,
             participants: Array.isArray(call.participants) ? call.participants.join(',') : call.participants || '',
-            date: call.date,
-            duration: call.duration || 0,
+            date: callDate,
+            duration: typeof call.duration === 'number' ? call.duration : 0,
             sentiment: call.sentiment || 'neutral',
             topics: Array.isArray(call.topics) ? call.topics.join(',') : call.topics || '',
             summary: call.summary || '',
@@ -245,6 +269,18 @@ export class GraphService {
         const documents = accountData.documents?.[0]?.data || [];
         let docCount = 0;
         for (const document of documents) {
+          // Safely handle document data and format date for Neo4j
+          const docTitle = document.title || `Document ${docCount + 1}`;
+          let docDate = document.date || new Date().toISOString();
+          // Ensure ISO 8601 format for Neo4j datetime()
+          if (docDate && !docDate.includes('T')) {
+            // Convert "YYYY-MM-DD HH:MM" format to ISO 8601
+            docDate = docDate.replace(' ', 'T') + ':00.000Z';
+          } else if (docDate && !docDate.endsWith('Z') && !docDate.includes('+')) {
+            // Add timezone if missing
+            docDate = docDate.endsWith('Z') ? docDate : docDate + 'Z';
+          }
+          
           await tx.run(`
             MERGE (d:Document {id: $docId})
             SET d.title = $title,
@@ -259,11 +295,11 @@ export class GraphService {
             MATCH (a:Account {name: $accountName})
             MERGE (d)-[:BELONGS_TO]->(a)
           `, {
-            docId: this.generateId('DOC', document.title, docCount++),
-            title: document.title,
+            docId: this.generateId('DOC', docTitle, docCount++),
+            title: docTitle,
             type: document.type || 'document',
-            author: document.author || '',
-            date: document.date || new Date().toISOString(),
+            author: document.author || 'Unknown',
+            date: docDate,
             contentSummary: document.summary || document.content_summary || '',
             tags: Array.isArray(document.tags) ? document.tags.join(',') : document.tags || '',
             accountName: accountName
