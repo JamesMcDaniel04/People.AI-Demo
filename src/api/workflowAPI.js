@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { WorkflowOrchestrator } from '../workflows/workflowOrchestrator.js';
 import { createDemoAPI } from './demoAPI.js';
+import { createGraphAPI } from './graphAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
@@ -125,6 +126,9 @@ export class WorkflowAPI {
 
     // Demo API routes
     this.app.use('/api', createDemoAPI(this.orchestrator));
+    
+    // Graph API routes (Neo4j Knowledge Graph)
+    this.app.use('/graph', createGraphAPI(this.orchestrator, this.orchestrator.dataManager, this.config));
 
     // robots.txt (avoid 404 noise in browsers/crawlers)
     this.app.get('/robots.txt', (_req, res) => {

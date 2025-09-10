@@ -7,6 +7,7 @@ import { N8nService } from './services/n8nService.js';
 import { KlavisN8nBridge } from './services/klavisN8nBridge.js';
 import { Logger } from '../utils/logger.js';
 import { JobQueueService } from '../services/jobQueueService.js';
+import { GraphService } from '../services/graphService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowOrchestrator {
@@ -34,6 +35,7 @@ export class WorkflowOrchestrator {
     // Initialize AI components
     this.dataManager = null;
     this.accountPlanner = null;
+    this.graphService = null;
   }
 
   async initialize() {
@@ -46,6 +48,10 @@ export class WorkflowOrchestrator {
       
       // Initialize account planner
       this.accountPlanner = new AccountPlannerApp(this.dataManager, this.config);
+      
+      // Initialize graph service for Neo4j knowledge graph
+      this.graphService = new GraphService(this.config);
+      await this.graphService.initialize();
       
       // Initialize all distributors
       await Promise.all([
@@ -390,11 +396,42 @@ export class WorkflowOrchestrator {
       const accountPlan = await this.accountPlanner.generateAccountPlan(accountName);
       this.logger.info('✅ AI account plan generated successfully', { accountName });
       
+      // Populate Neo4j Knowledge Graph with live data
+      if (this.graphService && this.graphService.isConnected()) {
+        try {
+          this.logger.info('🏗️ Creating knowledge graph for account', { accountName });
+          
+          // Get the raw account data that was used for planning
+          const accountData = accountPlan.rawData || await this.dataManager.getAccountData(accountName);
+          
+          // Create the knowledge graph
+          await this.graphService.createAccountGraph(accountName, accountData);
+          
+          // Add AI analysis results to the graph
+          const analysisResults = {
+            opportunities: accountPlan.opportunities || [],
+            risks: accountPlan.risks || [],
+            health: accountPlan.health || {},
+            insights: accountPlan.insights || {}
+          };
+          
+          await this.graphService.addAnalysisResults(accountName, analysisResults);
+          
+          this.logger.info('✅ Knowledge graph updated successfully', { accountName });
+        } catch (graphError) {
+          this.logger.warn('⚠️ Failed to update knowledge graph', { 
+            accountName, 
+            error: graphError.message 
+          });
+        }
+      }
+      
       // Add execution metadata
       accountPlan.execution = {
         executionId,
         processedAt: new Date().toISOString(),
-        workflowContext: context
+        workflowContext: context,
+        knowledgeGraphUpdated: this.graphService?.isConnected() || false
       };
 
       // Apply customizations
