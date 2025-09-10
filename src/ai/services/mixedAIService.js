@@ -256,19 +256,15 @@ export class MixedAIService {
     `;
 
     const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
-    const response = useTools
-      ? await this.generateCompletionWithTools(prompt, this.models.health)
-      : await this.generateCompletion(prompt, this.models.health);
-    
     try {
+      const response = useTools
+        ? await this.generateCompletionWithTools(prompt, this.models.health)
+        : await this.generateCompletion(prompt, this.models.health);
       const parsedResponse = JSON.parse(response);
-      if (!parsedResponse || typeof parsedResponse !== 'object') {
-        throw new Error('Invalid AI response format for health analysis');
-      }
+      if (!parsedResponse || typeof parsedResponse !== 'object') throw new Error('Invalid AI response format for health analysis');
       return parsedResponse;
-    } catch (parseError) {
-      console.error('Failed to parse health analysis response:', parseError);
-      // Return a fallback structure
+    } catch (err) {
+      console.warn('Health analysis using fallback due to AI error:', err.message);
       return {
         overallScore: 75,
         healthStatus: "good",
@@ -340,19 +336,15 @@ export class MixedAIService {
     `;
 
     const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
-    const response = useTools
-      ? await this.generateCompletionWithTools(prompt, this.models.opportunities)
-      : await this.generateCompletion(prompt, this.models.opportunities);
-    
     try {
+      const response = useTools
+        ? await this.generateCompletionWithTools(prompt, this.models.opportunities)
+        : await this.generateCompletion(prompt, this.models.opportunities);
       const opportunities = JSON.parse(response);
-      if (!Array.isArray(opportunities)) {
-        throw new Error('AI response must be an array of opportunities');
-      }
+      if (!Array.isArray(opportunities)) throw new Error('AI response must be an array of opportunities');
       return opportunities;
-    } catch (parseError) {
-      console.error('Failed to parse opportunities response:', parseError);
-      // Return fallback opportunities
+    } catch (err) {
+      console.warn('Opportunities using fallback due to AI error:', err.message);
       return [
         {
           type: "expansion",
@@ -525,22 +517,15 @@ export class MixedAIService {
     `;
 
     const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
-    const response = useTools
-      ? await this.generateCompletionWithTools(prompt, this.models.recommendations, { max_tokens: 4000, temperature: 0.2 })
-      : await this.generateCompletion(prompt, this.models.recommendations, {
-        max_tokens: 4000,
-        temperature: 0.2
-    });
-    
     try {
+      const response = useTools
+        ? await this.generateCompletionWithTools(prompt, this.models.recommendations, { max_tokens: 4000, temperature: 0.2 })
+        : await this.generateCompletion(prompt, this.models.recommendations, { max_tokens: 4000, temperature: 0.2 });
       const parsedResponse = JSON.parse(response);
-      if (!parsedResponse || typeof parsedResponse !== 'object') {
-        throw new Error('Invalid AI response format for strategic recommendations');
-      }
+      if (!parsedResponse || typeof parsedResponse !== 'object') throw new Error('Invalid AI response format for strategic recommendations');
       return parsedResponse;
-    } catch (parseError) {
-      console.error('Failed to parse recommendations response:', parseError);
-      // Return fallback recommendations
+    } catch (err) {
+      console.warn('Recommendations using fallback due to AI error:', err.message);
       return {
         immediate: [
           {
@@ -613,21 +598,15 @@ export class MixedAIService {
     `;
 
     const useTools = this.toolsEnabled && (this.config.data?.source === 'mcp');
-    const response = useTools
-      ? await this.generateCompletionWithTools(prompt, this.models.insights, { temperature: 0.3 })
-      : await this.generateCompletion(prompt, this.models.insights, {
-        temperature: 0.3
-    });
-    
     try {
+      const response = useTools
+        ? await this.generateCompletionWithTools(prompt, this.models.insights, { temperature: 0.3 })
+        : await this.generateCompletion(prompt, this.models.insights, { temperature: 0.3 });
       const insights = JSON.parse(response);
-      if (!Array.isArray(insights)) {
-        throw new Error('AI response must be an array of insights');
-      }
+      if (!Array.isArray(insights)) throw new Error('AI response must be an array of insights');
       return insights;
-    } catch (parseError) {
-      console.error('Failed to parse insights response:', parseError);
-      // Return fallback insights
+    } catch (err) {
+      console.warn('Insights using fallback due to AI error:', err.message);
       return [
         {
           type: "relationship",

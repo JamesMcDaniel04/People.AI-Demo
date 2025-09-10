@@ -38,6 +38,34 @@ export class WorkflowAPI {
 
   setupRoutes() {
     // Health check
+    this.app.get('/', (req, res) => {
+      const port = process.env.WORKFLOW_PORT || 3001;
+      res.type('html').send(`
+        <!doctype html>
+        <html>
+        <head><meta charset="utf-8"><title>AI Account Planner API</title></head>
+        <body style="font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; padding: 20px;">
+          <h1>AI Account Planner API</h1>
+          <p>Server is running. Try these endpoints:</p>
+          <ul>
+            <li><a href="/health">/health</a></li>
+            <li><a href="/integration/status">/integration/status</a></li>
+            <li><a href="/templates">/templates</a> (GET)</li>
+          </ul>
+          <p>POST actions:</p>
+          <ul>
+            <li>POST <code>/quick/account-plan</code></li>
+          </ul>
+          <small>Port: ${port}</small>
+        </body>
+        </html>
+      `);
+    });
+
+    // Quietly ignore favicon to prevent 404 in browser console
+    this.app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
+    // Health check
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'healthy',
@@ -544,6 +572,51 @@ export class WorkflowAPI {
     ];
   }
 
+  async getIntegrationStatus(req, res) {
+    try {
+      const status = await this.orchestrator.dataManager.getStatus();
+      res.json({ status: 'success', integration: status });
+    } catch (error) {
+      this.logger.error('❌ Failed to get integration status', { error: error.message });
+      res.status(500).json({ error: 'Failed to get integration status', message: error.message });
+    }
+  }
+
+  async startKlavisAuth(req, res) {
+    try {
+      const redirectUri = this.config.mcp?.oauth?.redirectUri || 'http://localhost:3001/auth/klavis/callback';
+      const state = Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
+      res.json({
+        status: 'success',
+        message: 'Use your Klavis console to connect services, then return with code/token to callback.',
+        redirectUri,
+        state,
+        callbackExample: `${redirectUri}?server=gmail&token=demo-token&state=${state}`
+      });
+    } catch (error) {
+      this.logger.error('❌ Failed to start Klavis auth', { error: error.message });
+      res.status(500).json({ error: 'Failed to start Klavis auth', message: error.message });
+    }
+  }
+
+  async klavisAuthCallback(req, res) {
+    try {
+      const { server, token } = req.query;
+      if (!server || !token) {
+        return res.status(400).json({ error: 'server and token query params are required' });
+      }
+      const klavis = this.orchestrator.dataManager.getKlavisProvider?.();
+      if (!klavis) {
+        return res.status(400).json({ error: 'Klavis provider not initialized' });
+      }
+      await klavis.connectServer(server, { token });
+      res.json({ status: 'success', connected: server });
+    } catch (error) {
+      this.logger.error('❌ Klavis auth callback failed', { error: error.message });
+      res.status(500).json({ error: 'Klavis auth callback failed', message: error.message });
+    }
+  }
+
   // Error handling middleware
   errorHandler(error, req, res, next) {
     this.logger.error('❌ API Error', {
@@ -578,48 +651,3 @@ export class WorkflowAPI {
     }
   }
 }
-  async getIntegrationStatus(req, res) {
-    try {
-      const status = await this.orchestrator.dataManager.getStatus();
-      res.json({ status: 'success', integration: status });
-    } catch (error) {
-      this.logger.error('❌ Failed to get integration status', { error: error.message });
-      res.status(500).json({ error: 'Failed to get integration status', message: error.message });
-    }
-  }
-
-  async startKlavisAuth(req, res) {
-    try {
-      const redirectUri = this.config.mcp?.oauth?.redirectUri || 'http://localhost:3001/auth/klavis/callback';
-      const state = Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
-      // In a real flow, redirect user to Klavis connection URL.
-      res.json({
-        status: 'success',
-        message: 'Use your Klavis console to connect services, then return with code/token to callback.',
-        redirectUri,
-        state,
-        callbackExample: `${redirectUri}?server=gmail&token=demo-token&state=${state}`
-      });
-    } catch (error) {
-      this.logger.error('❌ Failed to start Klavis auth', { error: error.message });
-      res.status(500).json({ error: 'Failed to start Klavis auth', message: error.message });
-    }
-  }
-
-  async klavisAuthCallback(req, res) {
-    try {
-      const { server, token } = req.query;
-      if (!server || !token) {
-        return res.status(400).json({ error: 'server and token query params are required' });
-      }
-      const klavis = this.orchestrator.dataManager.getKlavisProvider?.();
-      if (!klavis) {
-        return res.status(400).json({ error: 'Klavis provider not initialized' });
-      }
-      await klavis.connectServer(server, { token });
-      res.json({ status: 'success', connected: server });
-    } catch (error) {
-      this.logger.error('❌ Klavis auth callback failed', { error: error.message });
-      res.status(500).json({ error: 'Klavis auth callback failed', message: error.message });
-    }
-  }
