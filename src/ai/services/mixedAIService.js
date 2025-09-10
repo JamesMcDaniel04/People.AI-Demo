@@ -420,17 +420,13 @@ export class MixedAIService {
     ]
     `;
 
-    const response = await this.generateCompletion(prompt, this.models.risks);
-    
     try {
+      const response = await this.generateCompletion(prompt, this.models.risks);
       const risks = JSON.parse(response);
-      if (!Array.isArray(risks)) {
-        throw new Error('AI response must be an array of risks');
-      }
+      if (!Array.isArray(risks)) throw new Error('AI response must be an array of risks');
       return risks;
-    } catch (parseError) {
-      console.error('Failed to parse risks response:', parseError);
-      // Return fallback risks
+    } catch (err) {
+      console.warn('Risks using fallback due to AI error:', err.message);
       return [
         {
           type: "competitive",
