@@ -2,11 +2,12 @@ import neo4j from 'neo4j-driver';
 import { Logger } from '../utils/logger.js';
 
 export class GraphService {
-  constructor(config) {
+  constructor(config, postgresService = null) {
     this.config = config;
     this.logger = new Logger(config);
     this.driver = null;
     this.connected = false;
+    this.postgresService = postgresService;
   }
 
   async initialize() {
@@ -483,6 +484,253 @@ export class GraphService {
 
   isConnected() {
     return this.connected;
+  }
+
+  async createGraphFromPostgres(accountName) {
+    if (!this.connected) {
+      this.logger.warn('GraphService not connected, skipping graph creation');
+      return null;
+    }
+
+    if (!this.postgresService || !this.postgresService.isConnected()) {
+      this.logger.warn('PostgresService not available, falling back to direct data');
+      return null;
+    }
+
+    this.logger.info(`🔗 Creating knowledge graph from PostgreSQL data for ${accountName}...`);
+    const session = this.driver.session({ database: 'neo4j' });
+
+    try {
+      // Get account data from PostgreSQL
+      const accountData = await this.postgresService.getAccountData(accountName);
+      
+      if (!accountData) {
+        throw new Error(`No PostgreSQL data found for account: ${accountName}`);
+      }
+
+      const result = await session.executeWrite(async tx => {
+        // 1. Create Account node
+        await tx.run(`
+          MERGE (a:Account {id: $accountId, name: $name})
+          SET a.industry = $industry,
+              a.region = $region,
+              a.tier = $tier,
+              a.employees = $employees,
+              a.revenue = $revenue,
+              a.health_score = $healthScore,
+              a.ai_insights = $aiInsights,
+              a.updated_at = datetime(),
+              a.source = 'postgresql'
+        `, {
+          accountId: `POSTGRES_ACC_${accountData.id}`,
+          name: accountData.name,
+          industry: accountData.industry,
+          region: accountData.region,
+          tier: accountData.tier,
+          employees: accountData.employees,
+          revenue: parseFloat(accountData.revenue || 0),
+          healthScore: parseFloat(accountData.health_score || 0),
+          aiInsights: JSON.stringify(accountData.ai_insights || {})
+        });
+
+        // 2. Create Stakeholders and relationships
+        const stakeholders = accountData.stakeholders || [];
+        for (const stakeholder of stakeholders) {
+          await tx.run(`
+            MERGE (s:Stakeholder {id: $stakeholderId})
+            SET s.name = $name,
+                s.email = $email,
+                s.role = $role,
+                s.department = $department,
+                s.influence_level = $influenceLevel,
+                s.engagement_score = $engagementScore,
+                s.updated_at = datetime(),
+                s.source = 'postgresql'
+            
+            WITH s
+            MATCH (a:Account {name: $accountName})
+            MERGE (s)-[:WORKS_AT]->(a)
+          `, {
+            stakeholderId: `POSTGRES_STK_${stakeholder.id}`,
+            name: stakeholder.name,
+            email: stakeholder.email,
+            role: stakeholder.role,
+            department: stakeholder.department,
+            influenceLevel: stakeholder.influence_level,
+            engagementScore: parseFloat(stakeholder.engagement_score || 0),
+            accountName: accountData.name
+          });
+        }
+
+        // 3. Create Interaction nodes
+        const interactions = accountData.interactions || [];
+        for (const interaction of interactions) {
+          const nodeLabels = interaction.type === 'email' ? 'Email:Interaction' : 
+                           interaction.type === 'call' ? 'Call:Interaction' : 'Interaction';
+          
+          await tx.run(`
+            MERGE (i:${nodeLabels} {id: $interactionId})
+            SET i.subject = $subject,
+                i.type = $type,
+                i.participants = $participants,
+                i.date = datetime($date),
+                i.duration = $duration,
+                i.sentiment = $sentiment,
+                i.topics = $topics,
+                i.summary = $summary,
+                i.outcome = $outcome,
+                i.updated_at = datetime(),
+                i.source = 'postgresql'
+            
+            WITH i
+            MATCH (a:Account {name: $accountName})
+            MERGE (i)-[:RELATES_TO]->(a)
+          `, {
+            interactionId: `POSTGRES_INT_${interaction.id}`,
+            subject: interaction.subject || '',
+            type: interaction.type,
+            participants: interaction.participants ? interaction.participants.join(',') : '',
+            date: interaction.date || new Date().toISOString(),
+            duration: interaction.duration || 0,
+            sentiment: interaction.sentiment || 'neutral',
+            topics: interaction.topics ? interaction.topics.join(',') : '',
+            summary: interaction.summary || '',
+            outcome: interaction.outcome || '',
+            accountName: accountData.name
+          });
+
+          // Link interactions to stakeholders based on participants
+          if (interaction.participants && interaction.participants.length > 0) {
+            for (const participant of interaction.participants) {
+              await tx.run(`
+                MATCH (i:Interaction {id: $interactionId})
+                MATCH (s:Stakeholder)
+                WHERE s.email = $participant OR s.name CONTAINS $participant
+                MERGE (i)-[:INVOLVES]->(s)
+              `, {
+                interactionId: `POSTGRES_INT_${interaction.id}`,
+                participant: participant.trim()
+              });
+            }
+          }
+        }
+
+        // 4. Create Document nodes
+        const documents = accountData.documents || [];
+        for (const document of documents) {
+          await tx.run(`
+            MERGE (d:Document {id: $docId})
+            SET d.title = $title,
+                d.type = $type,
+                d.author = $author,
+                d.date = datetime($date),
+                d.content_summary = $contentSummary,
+                d.tags = $tags,
+                d.updated_at = datetime(),
+                d.source = 'postgresql'
+            
+            WITH d
+            MATCH (a:Account {name: $accountName})
+            MERGE (d)-[:BELONGS_TO]->(a)
+          `, {
+            docId: `POSTGRES_DOC_${document.id}`,
+            title: document.title,
+            type: document.type,
+            author: document.author,
+            date: document.date || new Date().toISOString(),
+            contentSummary: document.content_summary || '',
+            tags: document.tags ? document.tags.join(',') : '',
+            accountName: accountData.name
+          });
+        }
+
+        // 5. Create Opportunity nodes
+        const opportunities = accountData.opportunities || [];
+        for (const opportunity of opportunities) {
+          await tx.run(`
+            MERGE (o:Opportunity {id: $oppId})
+            SET o.title = $title,
+                o.description = $description,
+                o.priority = $priority,
+                o.potential_value = $potentialValue,
+                o.probability = $probability,
+                o.category = $category,
+                o.timeline = $timeline,
+                o.status = $status,
+                o.updated_at = datetime(),
+                o.source = 'postgresql'
+            
+            WITH o
+            MATCH (a:Account {name: $accountName})
+            MERGE (o)-[:IDENTIFIED_FOR]->(a)
+          `, {
+            oppId: `POSTGRES_OPP_${opportunity.id}`,
+            title: opportunity.title,
+            description: opportunity.description,
+            priority: opportunity.priority,
+            potentialValue: parseFloat(opportunity.potential_value || 0),
+            probability: parseFloat(opportunity.probability || 0),
+            category: opportunity.category,
+            timeline: opportunity.timeline,
+            status: opportunity.status,
+            accountName: accountData.name
+          });
+        }
+
+        // 6. Create Risk nodes
+        const risks = accountData.risks || [];
+        for (const risk of risks) {
+          await tx.run(`
+            MERGE (r:Risk {id: $riskId})
+            SET r.title = $title,
+                r.description = $description,
+                r.severity = $severity,
+                r.likelihood = $likelihood,
+                r.category = $category,
+                r.mitigation = $mitigation,
+                r.status = $status,
+                r.updated_at = datetime(),
+                r.source = 'postgresql'
+            
+            WITH r
+            MATCH (a:Account {name: $accountName})
+            MERGE (r)-[:THREATENS]->(a)
+          `, {
+            riskId: `POSTGRES_RSK_${risk.id}`,
+            title: risk.title,
+            description: risk.description,
+            severity: risk.severity,
+            likelihood: parseFloat(risk.likelihood || 0),
+            category: risk.category,
+            mitigation: risk.mitigation,
+            status: risk.status,
+            accountName: accountData.name
+          });
+        }
+
+        return {
+          account: accountData.name,
+          stakeholders: stakeholders.length,
+          interactions: interactions.length,
+          documents: documents.length,
+          opportunities: opportunities.length,
+          risks: risks.length,
+          source: 'postgresql'
+        };
+      });
+
+      this.logger.info(`✅ Knowledge graph created from PostgreSQL for ${accountName}`, result);
+      return result;
+
+    } catch (error) {
+      this.logger.error('❌ Failed to create knowledge graph from PostgreSQL', { 
+        account: accountName, 
+        error: error.message 
+      });
+      throw error;
+    } finally {
+      await session.close();
+    }
   }
 
   async close() {

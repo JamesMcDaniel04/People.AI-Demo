@@ -3,6 +3,7 @@ import cors from 'cors';
 import { WorkflowOrchestrator } from '../workflows/workflowOrchestrator.js';
 import { createDemoAPI } from './demoAPI.js';
 import { createGraphAPI } from './graphAPI.js';
+import { createAuthAPI } from './authAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
@@ -126,6 +127,9 @@ export class WorkflowAPI {
 
     // Demo API routes
     this.app.use('/api', createDemoAPI(this.orchestrator));
+    
+    // Authentication API routes (Supabase Auth)
+    this.app.use('/auth', createAuthAPI(this.orchestrator.supabaseService, this.config));
     
     // Graph API routes (Neo4j Knowledge Graph)
     this.app.use('/graph', createGraphAPI(this.orchestrator, this.orchestrator.dataManager, this.config));

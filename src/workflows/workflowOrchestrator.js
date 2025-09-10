@@ -8,6 +8,8 @@ import { KlavisN8nBridge } from './services/klavisN8nBridge.js';
 import { Logger } from '../utils/logger.js';
 import { JobQueueService } from '../services/jobQueueService.js';
 import { GraphService } from '../services/graphService.js';
+import { PostgresService } from '../services/postgresService.js';
+import { SupabaseService } from '../services/supabaseService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowOrchestrator {
@@ -36,6 +38,8 @@ export class WorkflowOrchestrator {
     this.dataManager = null;
     this.accountPlanner = null;
     this.graphService = null;
+    this.postgresService = null;
+    this.supabaseService = null;
   }
 
   async initialize() {
@@ -49,8 +53,16 @@ export class WorkflowOrchestrator {
       // Initialize account planner
       this.accountPlanner = new AccountPlannerApp(this.dataManager, this.config);
       
-      // Initialize graph service for Neo4j knowledge graph
-      this.graphService = new GraphService(this.config);
+      // Initialize Supabase service for authentication and user management
+      this.supabaseService = new SupabaseService(this.config);
+      await this.supabaseService.initialize();
+      
+      // Initialize PostgreSQL service
+      this.postgresService = new PostgresService(this.config);
+      await this.postgresService.initialize();
+      
+      // Initialize graph service for Neo4j knowledge graph (with PostgreSQL integration)
+      this.graphService = new GraphService(this.config, this.postgresService);
       await this.graphService.initialize();
       
       // Initialize all distributors
@@ -396,18 +408,18 @@ export class WorkflowOrchestrator {
       const accountPlan = await this.accountPlanner.generateAccountPlan(accountName);
       this.logger.info('✅ AI account plan generated successfully', { accountName });
       
-      // Populate Neo4j Knowledge Graph with live data
-      if (this.graphService && this.graphService.isConnected()) {
+      // Store data in PostgreSQL and create Neo4j Knowledge Graph
+      if (this.postgresService && this.postgresService.isConnected()) {
         try {
-          this.logger.info('🏗️ Creating knowledge graph for account', { accountName });
+          this.logger.info('📊 Storing account data in PostgreSQL', { accountName });
           
           // Get the raw account data that was used for planning
           const accountData = accountPlan.rawData || await this.dataManager.getAccountData(accountName);
           
-          // Create the knowledge graph
-          await this.graphService.createAccountGraph(accountName, accountData);
+          // Store account data in PostgreSQL
+          await this.postgresService.storeAccountData(accountName, accountData);
           
-          // Add AI analysis results to the graph
+          // Store AI analysis results in PostgreSQL
           const analysisResults = {
             opportunities: accountPlan.opportunities || [],
             risks: accountPlan.risks || [],
@@ -415,14 +427,50 @@ export class WorkflowOrchestrator {
             insights: accountPlan.insights || {}
           };
           
-          await this.graphService.addAnalysisResults(accountName, analysisResults);
+          await this.postgresService.addAnalysisResults(accountName, analysisResults);
           
-          this.logger.info('✅ Knowledge graph updated successfully', { accountName });
-        } catch (graphError) {
-          this.logger.warn('⚠️ Failed to update knowledge graph', { 
+          this.logger.info('✅ Account data stored in PostgreSQL successfully', { accountName });
+          
+          // Create Neo4j Knowledge Graph from PostgreSQL data
+          if (this.graphService && this.graphService.isConnected()) {
+            this.logger.info('🔗 Creating Neo4j knowledge graph from PostgreSQL data', { accountName });
+            
+            await this.graphService.createGraphFromPostgres(accountName);
+            
+            this.logger.info('✅ Neo4j knowledge graph created from PostgreSQL data', { accountName });
+          }
+          
+        } catch (dataError) {
+          this.logger.warn('⚠️ Failed to store data or create knowledge graph', { 
             accountName, 
-            error: graphError.message 
+            error: dataError.message 
           });
+        }
+      } else {
+        // Fallback to direct Neo4j creation if PostgreSQL is not available
+        if (this.graphService && this.graphService.isConnected()) {
+          try {
+            this.logger.info('🏗️ Creating knowledge graph directly (PostgreSQL not available)', { accountName });
+            
+            const accountData = accountPlan.rawData || await this.dataManager.getAccountData(accountName);
+            await this.graphService.createAccountGraph(accountName, accountData);
+            
+            const analysisResults = {
+              opportunities: accountPlan.opportunities || [],
+              risks: accountPlan.risks || [],
+              health: accountPlan.health || {},
+              insights: accountPlan.insights || {}
+            };
+            
+            await this.graphService.addAnalysisResults(accountName, analysisResults);
+            
+            this.logger.info('✅ Knowledge graph updated directly', { accountName });
+          } catch (graphError) {
+            this.logger.warn('⚠️ Failed to update knowledge graph', { 
+              accountName, 
+              error: graphError.message 
+            });
+          }
         }
       }
       
