@@ -45,10 +45,15 @@ The GraphRAG enhancement integrates **Neo4j**, **Pinecone**, and **Microsoft Gra
 # Copy environment template
 cp .env.example .env
 
-# Configure API keys in .env:
+# Configure service credentials in .env:
 GRAPHRAG_ENABLED=true
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
 NEO4J_PASSWORD=peopleai2024
+NEO4J_DATABASE=neo4j
 PINECONE_API_KEY=your_pinecone_key
+PINECONE_ENVIRONMENT=us-east-1-aws
+PINECONE_INDEX_NAME=people-ai-demo
 OPENAI_API_KEY=your_openai_key
 ```
 

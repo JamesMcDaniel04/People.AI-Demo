@@ -18,6 +18,7 @@ class Neo4jService:
         self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         self.user = os.getenv("NEO4J_USER", "neo4j")
         self.password = os.getenv("NEO4J_PASSWORD", "peopleai2024")
+        self.database = os.getenv("NEO4J_DATABASE", "neo4j")
         
     async def connect(self):
         """Connect to Neo4j database"""
@@ -28,7 +29,7 @@ class Neo4jService:
             )
             
             # Test connection
-            async with self.driver.session() as session:
+            async with self.driver.session(database=self.database) as session:
                 result = await session.run("RETURN 1 as test")
                 await result.single()
             
@@ -69,7 +70,7 @@ class Neo4jService:
             "CREATE INDEX account_name IF NOT EXISTS FOR (a:Account) ON (a.name)"
         ]
         
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.database) as session:
             for query in schema_queries:
                 try:
                     await session.run(query)
@@ -80,7 +81,7 @@ class Neo4jService:
     
     async def build_account_graph(self, account_name: str, entities: Dict[str, Any]) -> Dict[str, Any]:
         """Build knowledge graph for an account from extracted entities"""
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.database) as session:
             async with session.begin_transaction() as tx:
                 
                 # Create account node
@@ -224,7 +225,7 @@ class Neo4jService:
         ORDER BY distance
         """
         
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.database) as session:
             result = await session.run(query, 
                                      account_name=account_name, 
                                      entity_id=entity_id, 
@@ -257,7 +258,7 @@ class Neo4jService:
         RETURN nodes(path) as entities, relationships(path) as relationships, length(path) as distance
         """
         
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.database) as session:
             result = await session.run(query, 
                                      account_name=account_name,
                                      source_id=source_id, 
@@ -295,7 +296,7 @@ class Neo4jService:
         CALL gds.graph.drop('account-graph-' + $account_name)
         """
         
-        async with self.driver.session() as session:
+        async with self.driver.session(database=self.database) as session:
             try:
                 # Project graph
                 await session.run(project_query, account_name=account_name)

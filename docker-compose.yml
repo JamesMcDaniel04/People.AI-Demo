@@ -6,13 +6,14 @@ services:
     image: neo4j:5.15-community
     container_name: people-ai-neo4j
     environment:
-      - NEO4J_AUTH=neo4j/peopleai2024
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-peopleai2024}
       - NEO4J_PLUGINS=["apoc", "graph-data-science"]
       - NEO4J_apoc_export_file_enabled=true
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_import_file_use__neo4j__config=true
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      - NEO4J_dbms_default__database=${NEO4J_DATABASE:-neo4j}
     ports:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
@@ -23,7 +24,7 @@ services:
       - neo4j_plugins:/plugins
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p peopleai2024 'RETURN 1'"]
+      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-peopleai2024} 'RETURN 1'"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -52,11 +53,13 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=peopleai2024
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-peopleai2024}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-people-ai-demo}
     ports:
       - "8000:8000"
     depends_on:
