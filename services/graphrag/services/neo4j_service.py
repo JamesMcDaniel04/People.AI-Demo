@@ -19,13 +19,31 @@ class Neo4jService:
         self.user = os.getenv("NEO4J_USER", "neo4j")
         self.password = os.getenv("NEO4J_PASSWORD", "peopleai2024")
         self.database = os.getenv("NEO4J_DATABASE", "neo4j")
+        self.is_aura = self.uri.startswith("neo4j+s://")
         
     async def connect(self):
-        """Connect to Neo4j database"""
+        """Connect to Neo4j database (local or Aura)"""
         try:
+            # Configure connection options based on environment
+            driver_config = {}
+            
+            # For Neo4j Aura connections
+            if self.is_aura:
+                driver_config.update({
+                    "max_connection_lifetime": 30 * 60,  # 30 minutes
+                    "max_connection_pool_size": 50,
+                    "connection_acquisition_timeout": 120,  # 2 minutes
+                    "connection_timeout": 30,
+                    "encrypted": True
+                })
+                logger.info("🌐 Connecting to Neo4j Aura Cloud...")
+            else:
+                logger.info("🔗 Connecting to local Neo4j...")
+            
             self.driver = AsyncGraphDatabase.driver(
                 self.uri, 
-                auth=(self.user, self.password)
+                auth=(self.user, self.password),
+                **driver_config
             )
             
             # Test connection

@@ -44,6 +44,26 @@ services:
       timeout: 5s
       retries: 3
 
+  # PostgreSQL (Additional structured data source)
+  postgres:
+    image: postgres:15-alpine
+    container_name: people-ai-postgres
+    environment:
+      - POSTGRES_DB=peopleai_demo
+      - POSTGRES_USER=${POSTGRES_USER:-peopleai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-peopleai2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-peopleai} -d peopleai_demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # GraphRAG Python Service
   graphrag-service:
     build:
@@ -58,16 +78,22 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-peopleai2024}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
-      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
-      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-people-ai-demo}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east-1-aws}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-peopleai}
+      - GRAPHRAG_MAX_HOPS=${GRAPHRAG_MAX_HOPS:-3}
+      - GRAPHRAG_COMMUNITY_RESOLUTION=${GRAPHRAG_COMMUNITY_RESOLUTION:-1.0}
     ports:
       - "8000:8000"
     depends_on:
+      # Only depend on local Neo4j if not using Aura
       neo4j:
         condition: service_healthy
+        required: false
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    profiles:
+      - graphrag
 
 volumes:
   neo4j_data:
@@ -75,6 +101,7 @@ volumes:
   neo4j_import:
   neo4j_plugins:
   redis_data:
+  postgres_data:
 
 networks:
   default:
