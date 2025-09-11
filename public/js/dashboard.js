@@ -46,6 +46,14 @@ class Dashboard {
                 this.hideCreateWorkflowModal();
             }
         });
+
+        // People.ai modal
+        const pplOpen = document.getElementById('openPeopleAIConfig');
+        const pplClose = document.getElementById('closePeopleAIConfig');
+        const pplSave = document.getElementById('savePeopleAIConfig');
+        if (pplOpen) pplOpen.addEventListener('click', () => this.showPeopleAIModal());
+        if (pplClose) pplClose.addEventListener('click', () => this.hidePeopleAIModal());
+        if (pplSave) pplSave.addEventListener('click', () => this.savePeopleAIConfig());
     }
 
     switchTab(tabName) {
@@ -83,6 +91,42 @@ class Dashboard {
             case 'settings':
                 await this.loadSettings();
                 break;
+        }
+    }
+
+    // People.ai modal controls
+    showPeopleAIModal() { document.getElementById('peopleaiModal').classList.add('active'); }
+    hidePeopleAIModal() { document.getElementById('peopleaiModal').classList.remove('active'); }
+
+    async savePeopleAIConfig() {
+        // Collect preview flags and store under settings.peopleai
+        const payload = {
+            peopleai: {
+                enabled: document.getElementById('peopleaiEnabled').checked,
+                features: {
+                    autoCapture: document.getElementById('peopleaiFeatureCapture').checked,
+                    engagementScoring: document.getElementById('peopleaiFeatureEngagement').checked,
+                    coachingInsights: document.getElementById('peopleaiFeatureCoaching').checked,
+                    workflowTriggers: document.getElementById('peopleaiFeatureTriggers').checked
+                }
+            }
+        };
+
+        try {
+            this.showLoading();
+            const res = await fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to save People.ai settings');
+            this.hidePeopleAIModal();
+            alert('Saved People.ai preview settings. (No live connection — UI only)');
+        } catch (err) {
+            alert(`Failed to save People.ai settings: ${err.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 

@@ -283,6 +283,60 @@
                     <div class="integration-status" id="integrationDetails">
                         <div class="loading">Loading integration details...</div>
                     </div>
+
+                    <!-- People.ai Integration Spotlight -->
+                    <div class="section" style="margin-top: 1.5rem;">
+                        <div class="section-header">
+                            <h2><i class="fas fa-handshake"></i> People.ai Integration (Preview)</h2>
+                            <p>Preview how People.ai could enhance planning, insights, and execution</p>
+                        </div>
+
+                        <div class="partner-grid">
+                            <div class="partner-card">
+                                <div class="partner-header">
+                                    <div class="partner-title">
+                                        <span class="partner-badge">Potential Integration</span>
+                                        <h3>People.ai Revenue Intelligence</h3>
+                                        <p class="partner-sub">Contact auto-capture, activity intelligence, and coaching</p>
+                                    </div>
+                                    <div class="partner-actions">
+                                        <button class="secondary-button" id="peopleaiLearnMore" onclick="window.open('https://www.people.ai','_blank')">
+                                            <i class="fas fa-book-open"></i> Learn More
+                                        </button>
+                                        <button class="primary-button" id="openPeopleAIConfig">
+                                            <i class="fas fa-plug"></i> Configure (Preview)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="partner-body">
+                                    <div class="partner-features">
+                                        <div class="feature-item"><i class="fas fa-user-check"></i> Contact & Activity Auto-Capture</div>
+                                        <div class="feature-item"><i class="fas fa-chart-line"></i> Engagement Scores in Account Health</div>
+                                        <div class="feature-item"><i class="fas fa-lightbulb"></i> AI Coaching from Real Activity</div>
+                                        <div class="feature-item"><i class="fas fa-diagram-project"></i> Opportunity Hygiene Signals</div>
+                                        <div class="feature-item"><i class="fas fa-share-nodes"></i> Workflow Triggers from People.ai Signals</div>
+                                    </div>
+                                    <div class="partner-preview">
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Engagement Intelligence</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">C-suite coverage: 3/5 • Last 14d activity: High • Risky opps: 2</div>
+                                        </div>
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Coaching Insights</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">“Influencer missing on Decision Team for Expansion EU — add VP Ops.”</div>
+                                        </div>
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Workflow Hooks</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">Trigger weekly hygiene sweep → Slack summary + CRM tasks</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -303,6 +357,39 @@
         <div class="loading-spinner">
             <i class="fas fa-spinner fa-spin"></i>
             <p>Processing...</p>
+        </div>
+    </div>
+
+    <!-- People.ai Config Modal (Preview) -->
+    <div class="modal" id="peopleaiModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>People.ai Integration (Preview)</h3>
+                <button class="close-modal" id="closePeopleAIConfig">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Enable People.ai (Preview)</label>
+                <input type="checkbox" id="peopleaiEnabled"> Enable visual widgets and workflow hooks
+            </div>
+            <div class="form-group">
+                <label>Planned Capabilities</label>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureCapture"> Contact & Activity Auto-Capture</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureEngagement"> Engagement Score → Health Model</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureCoaching"> Coaching Insights → Daily Digest</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureTriggers"> Workflow Triggers from People.ai Signals</label>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="secondary-button" id="peopleaiDocs" onclick="window.open('https://www.people.ai','_blank')"><i class="fas fa-external-link-alt"></i> Docs</button>
+                <button class="primary-button" id="savePeopleAIConfig"><i class="fas fa-save"></i> Save Preview</button>
+            </div>
         </div>
     </div>
 
