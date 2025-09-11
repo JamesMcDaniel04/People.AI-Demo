@@ -113,13 +113,20 @@ class Dashboard {
             return;
         }
         if (editBtn) {
+            let panel;
             if (editBtn.dataset.name) {
                 const item = editBtn.closest('.workflow-item');
-                const panel = item?.querySelector('.edit-schedule');
-                if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                panel = item?.querySelector('.edit-schedule');
             } else {
-                const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
-                if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                panel = document.getElementById(`edit-${editBtn.dataset.id}`);
+            }
+            if (panel) {
+                const willShow = panel.style.display === 'none';
+                panel.style.display = willShow ? 'block' : 'none';
+                if (willShow && !panel.dataset.inited) {
+                    this.initMiniScheduler(panel);
+                    panel.dataset.inited = '1';
+                }
             }
             return;
         }
@@ -580,9 +587,39 @@ class Dashboard {
                                     <a class="primary-button" href="/admin/queues/queue/scheduled-workflows"><i class="fas fa-list"></i> View Details</a>
                                 </div>
                                 <div class="edit-schedule" style="display:none; margin-top:8px;">
-                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${cron}" style="width:220px;">
+                                    <input type="hidden" class="cron-input" value="${cron}">
+                                    <div class="mini-scheduler">
+                                        <div class="mini-row">
+                                            <label>Frequency</label>
+                                            <div class="segmented">
+                                                <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                            </div>
+                                        </div>
+                                        <div class="mini-row time-row">
+                                            <label>Time</label>
+                                            <select class="time-select"></select>
+                                            <select class="tz-select">
+                                                <option value="Local">Local</option>
+                                                <option value="UTC">UTC</option>
+                                            </select>
+                                        </div>
+                                        <div class="mini-row dow-row">
+                                            <label>Day</label>
+                                            <select class="dow-select">
+                                                <option value="1">Monday</option>
+                                                <option value="2">Tuesday</option>
+                                                <option value="3">Wednesday</option>
+                                                <option value="4">Thursday</option>
+                                                <option value="5">Friday</option>
+                                                <option value="6">Saturday</option>
+                                                <option value="0">Sunday</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <button class="primary-button btn-save-schedule" data-name="${name}"><i class="fas fa-save"></i> Save</button>
-                                    <div><small>Use cron format.</small></div>
+                                    <div class="mini-note"><small>Pattern saves as cron on the server.</small></div>
                                 </div>
                             </div>
                         </div>`;
@@ -617,9 +654,39 @@ class Dashboard {
                                         </button>
                                     </div>
                                     <div class="edit-schedule" id="edit-${workflow.id}" style="display:none; margin-top:8px;">
-                                        <input type="text" class="cron-input" placeholder="* * * * *" value="${workflow.schedule || ''}" style="width:220px;">
+                                        <input type="hidden" class="cron-input" value="${workflow.schedule || ''}">
+                                        <div class="mini-scheduler">
+                                            <div class="mini-row">
+                                                <label>Frequency</label>
+                                                <div class="segmented">
+                                                    <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                    <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                    <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                                </div>
+                                            </div>
+                                            <div class="mini-row time-row">
+                                                <label>Time</label>
+                                                <select class="time-select"></select>
+                                                <select class="tz-select">
+                                                    <option value="Local">Local</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
+                                            </div>
+                                            <div class="mini-row dow-row">
+                                                <label>Day</label>
+                                                <select class="dow-select">
+                                                    <option value="1">Monday</option>
+                                                    <option value="2">Tuesday</option>
+                                                    <option value="3">Wednesday</option>
+                                                    <option value="4">Thursday</option>
+                                                    <option value="5">Friday</option>
+                                                    <option value="6">Saturday</option>
+                                                    <option value="0">Sunday</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                         <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
-                                        <small>Use cron format.</small>
+                                        <div class="mini-note"><small>Cron applied to this workflow.</small></div>
                                     </div>
                                 </div>
                             </div>`;
@@ -640,9 +707,39 @@ class Dashboard {
                                     <a href="#" class="secondary-button btn-edit-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-clock"></i> Edit Schedule</a>
                                 </div>
                                 <div class="edit-schedule" style="display:none; margin-top:8px;">
-                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${cron}" style="width:220px;">
+                                    <input type="hidden" class="cron-input" value="${cron}">
+                                    <div class="mini-scheduler">
+                                        <div class="mini-row">
+                                            <label>Frequency</label>
+                                            <div class="segmented">
+                                                <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                            </div>
+                                        </div>
+                                        <div class="mini-row time-row">
+                                            <label>Time</label>
+                                            <select class="time-select"></select>
+                                            <select class="tz-select">
+                                                <option value="Local">Local</option>
+                                                <option value="UTC">UTC</option>
+                                            </select>
+                                        </div>
+                                        <div class="mini-row dow-row">
+                                            <label>Day</label>
+                                            <select class="dow-select">
+                                                <option value="1">Monday</option>
+                                                <option value="2">Tuesday</option>
+                                                <option value="3">Wednesday</option>
+                                                <option value="4">Thursday</option>
+                                                <option value="5">Friday</option>
+                                                <option value="6">Saturday</option>
+                                                <option value="0">Sunday</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <button class="primary-button btn-save-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-save"></i> Save</button>
-                                    <div><small>UI-only mock schedule. No server changes.</small></div>
+                                    <div class="mini-note"><small>UI-only mock schedule. No server changes.</small></div>
                                 </div>
                             </div>
                         </div>
@@ -736,6 +833,102 @@ class Dashboard {
         } catch (err) {
             alert(`Failed to save mock schedule: ${err.message}`);
         }
+    }
+
+    // Initialize the mini scheduler controls inside an edit panel
+    initMiniScheduler(panel) {
+        const cronInput = panel.querySelector('.cron-input');
+        const segBtns = panel.querySelectorAll('.segmented .seg');
+        const timeSel = panel.querySelector('.time-select');
+        const tzSel = panel.querySelector('.tz-select');
+        const dowSel = panel.querySelector('.dow-select');
+
+        const setActiveMode = (mode) => {
+            segBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+            // Show/hide rows
+            const timeRow = panel.querySelector('.time-row');
+            const dowRow = panel.querySelector('.dow-row');
+            if (mode === 'hourly') {
+                if (timeRow) timeRow.style.display = 'none';
+                if (dowRow) dowRow.style.display = 'none';
+            } else if (mode === 'daily') {
+                if (timeRow) timeRow.style.display = 'flex';
+                if (dowRow) dowRow.style.display = 'none';
+            } else {
+                if (timeRow) timeRow.style.display = 'flex';
+                if (dowRow) dowRow.style.display = 'flex';
+            }
+        };
+
+        const fillTimeOptions = () => {
+            if (!timeSel || timeSel.options.length) return;
+            for (let h = 0; h < 24; h++) {
+                for (const m of [0, 30]) {
+                    const hour12 = (h % 12) === 0 ? 12 : (h % 12);
+                    const ampm = h < 12 ? 'am' : 'pm';
+                    const mm = m.toString().padStart(2, '0');
+                    const label = `${hour12}:${mm}${ampm}`;
+                    const opt = document.createElement('option');
+                    opt.value = `${h}:${m}`;
+                    opt.text = label;
+                    timeSel.appendChild(opt);
+                }
+            }
+        };
+
+        const parseCron = (cron) => {
+            try {
+                const parts = cron.trim().split(/\s+/);
+                if (parts.length < 5) return { mode: 'daily', h: 9, m: 0, dow: 1 };
+                const [min, hour, , , dow] = parts;
+                if (hour === '*' && dow === '*') return { mode: 'hourly', h: 0, m: 0 };
+                if (dow !== '*' && dow !== '?') return { mode: 'weekly', h: parseInt(hour)||9, m: parseInt(min)||0, dow: parseInt(dow)||1 };
+                return { mode: 'daily', h: parseInt(hour)||9, m: parseInt(min)||0 };
+            } catch (_) {
+                return { mode: 'daily', h: 9, m: 0, dow: 1 };
+            }
+        };
+
+        const buildCron = (mode, h, m, dow) => {
+            if (mode === 'hourly') return `0 * * * *`;
+            if (mode === 'daily') return `${m} ${h} * * *`;
+            return `${m} ${h} * * ${typeof dow === 'number' ? dow : 1}`;
+        };
+
+        const syncFromUI = () => {
+            const active = Array.from(segBtns).find(b => b.classList.contains('active'));
+            const mode = active ? active.dataset.mode : 'daily';
+            let h = 9, m = 0, dow = 1;
+            if (timeSel && timeSel.value) {
+                const [hh, mm] = timeSel.value.split(':').map(v => parseInt(v, 10));
+                if (!Number.isNaN(hh)) h = hh;
+                if (!Number.isNaN(mm)) m = mm;
+            }
+            if (dowSel && dowSel.value) dow = parseInt(dowSel.value, 10);
+            cronInput.value = buildCron(mode, h, m, dow);
+        };
+
+        // Init time options and values
+        fillTimeOptions();
+        const init = parseCron(cronInput.value || '* * * * *');
+
+        // Set initial controls
+        setActiveMode(init.mode);
+        if (timeSel) {
+            const key = `${init.h}:${init.m}`;
+            const opt = Array.from(timeSel.options).find(o => o.value === key);
+            if (opt) timeSel.value = key; else timeSel.selectedIndex = 18; // fallback 9:00am
+        }
+        if (dowSel && typeof init.dow === 'number') dowSel.value = String(init.dow);
+
+        // Wire events
+        segBtns.forEach(btn => btn.addEventListener('click', () => { setActiveMode(btn.dataset.mode); syncFromUI(); }));
+        if (timeSel) timeSel.addEventListener('change', syncFromUI);
+        if (dowSel) dowSel.addEventListener('change', syncFromUI);
+        if (tzSel) tzSel.addEventListener('change', () => {/* UI only */});
+
+        // Ensure cron reflects initial UI
+        syncFromUI();
     }
 
     async toggleWorkflow(id, enabled) {
