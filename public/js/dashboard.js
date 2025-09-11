@@ -131,21 +131,24 @@ class Dashboard {
             return;
         }
         if (saveBtn) {
-            // Mock-only save (UI)
+            const item = saveBtn.closest('.workflow-item');
+            const panel = item?.querySelector('.edit-schedule') || document.getElementById(`edit-${saveBtn.dataset.id}`);
+            const cronInput = panel?.querySelector('.cron-input');
+            const triggerInput = panel?.querySelector('.trigger-input');
+
+            // Persist trigger selection (UI-only) by key
+            const key = saveBtn.dataset.name || saveBtn.dataset.id || (item?.dataset.name);
+            if (key && triggerInput?.value) {
+                try { this.saveTriggerSelection(key, JSON.parse(triggerInput.value)); } catch(_){}
+            }
+
+            // Save schedule
             if (saveBtn.dataset.mock === 'true') {
-                const item = saveBtn.closest('.workflow-item');
-                const input = item?.querySelector('.edit-schedule .cron-input');
-                if (input) await this.saveMockSchedule(saveBtn.dataset.name, input.value);
+                if (cronInput) await this.saveMockSchedule(saveBtn.dataset.name, cronInput.value);
             } else if (saveBtn.dataset.name) {
-                // BullMQ schedule update by name
-                const item = saveBtn.closest('.workflow-item');
-                const input = item?.querySelector('.edit-schedule .cron-input');
-                if (input) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, input.value);
+                if (cronInput) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, cronInput.value);
             } else {
-                // Orchestrator workflow by id
-                const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
-                const input = panel?.querySelector('.cron-input');
-                if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
+                if (cronInput) await this.saveWorkflowSchedule(saveBtn.dataset.id, cronInput.value);
             }
             return;
         }
@@ -587,39 +590,52 @@ class Dashboard {
                                     <a class="primary-button" href="/admin/queues/queue/scheduled-workflows"><i class="fas fa-list"></i> View Details</a>
                                 </div>
                                 <div class="edit-schedule" style="display:none; margin-top:8px;">
-                                    <input type="hidden" class="cron-input" value="${cron}">
-                                    <div class="mini-scheduler">
-                                        <div class="mini-row">
-                                            <label>Frequency</label>
-                                            <div class="segmented">
-                                                <button type="button" class="seg" data-mode="weekly">Weekly</button>
-                                                <button type="button" class="seg" data-mode="daily">Daily</button>
-                                                <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                    <div class="mini-tabs">
+                                        <button type="button" class="tab tab-schedule active">Schedule</button>
+                                        <button type="button" class="tab tab-trigger">Trigger</button>
+                                    </div>
+                                    <div class="panel-schedule">
+                                        <input type="hidden" class="cron-input" value="${cron}">
+                                        <div class="mini-scheduler">
+                                            <div class="mini-row">
+                                                <label>Frequency</label>
+                                                <div class="segmented">
+                                                    <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                    <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                    <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                                </div>
+                                            </div>
+                                            <div class="mini-row time-row">
+                                                <label>Time</label>
+                                                <select class="time-select"></select>
+                                                <select class="tz-select">
+                                                    <option value="Local">Local</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
+                                            </div>
+                                            <div class="mini-row dow-row">
+                                                <label>Day</label>
+                                                <select class="dow-select">
+                                                    <option value="1">Monday</option>
+                                                    <option value="2">Tuesday</option>
+                                                    <option value="3">Wednesday</option>
+                                                    <option value="4">Thursday</option>
+                                                    <option value="5">Friday</option>
+                                                    <option value="6">Saturday</option>
+                                                    <option value="0">Sunday</option>
+                                                </select>
                                             </div>
                                         </div>
-                                        <div class="mini-row time-row">
-                                            <label>Time</label>
-                                            <select class="time-select"></select>
-                                            <select class="tz-select">
-                                                <option value="Local">Local</option>
-                                                <option value="UTC">UTC</option>
-                                            </select>
-                                        </div>
-                                        <div class="mini-row dow-row">
-                                            <label>Day</label>
-                                            <select class="dow-select">
-                                                <option value="1">Monday</option>
-                                                <option value="2">Tuesday</option>
-                                                <option value="3">Wednesday</option>
-                                                <option value="4">Thursday</option>
-                                                <option value="5">Friday</option>
-                                                <option value="6">Saturday</option>
-                                                <option value="0">Sunday</option>
-                                            </select>
-                                        </div>
+                                        <div class="mini-note"><small>Pattern saves as cron on the server.</small></div>
                                     </div>
-                                    <button class="primary-button btn-save-schedule" data-name="${name}"><i class="fas fa-save"></i> Save</button>
-                                    <div class="mini-note"><small>Pattern saves as cron on the server.</small></div>
+                                    <div class="panel-trigger" style="display:none;">
+                                        <input type="hidden" class="trigger-input" value="">
+                                        <div class="providers"></div>
+                                        <div class="trigger-list"></div>
+                                    </div>
+                                    <div style="margin-top:8px;">
+                                        <button class="primary-button btn-save-schedule" data-name="${name}"><i class="fas fa-save"></i> Save</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>`;
@@ -654,7 +670,78 @@ class Dashboard {
                                         </button>
                                     </div>
                                     <div class="edit-schedule" id="edit-${workflow.id}" style="display:none; margin-top:8px;">
-                                        <input type="hidden" class="cron-input" value="${workflow.schedule || ''}">
+                                        <div class="mini-tabs">
+                                            <button type="button" class="tab tab-schedule active">Schedule</button>
+                                            <button type="button" class="tab tab-trigger">Trigger</button>
+                                        </div>
+                                        <div class="panel-schedule">
+                                            <input type="hidden" class="cron-input" value="${workflow.schedule || ''}">
+                                            <div class="mini-scheduler">
+                                                <div class="mini-row">
+                                                    <label>Frequency</label>
+                                                    <div class="segmented">
+                                                        <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                        <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                        <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                                    </div>
+                                                </div>
+                                                <div class="mini-row time-row">
+                                                    <label>Time</label>
+                                                    <select class="time-select"></select>
+                                                    <select class="tz-select">
+                                                        <option value="Local">Local</option>
+                                                        <option value="UTC">UTC</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mini-row dow-row">
+                                                    <label>Day</label>
+                                                    <select class="dow-select">
+                                                        <option value="1">Monday</option>
+                                                        <option value="2">Tuesday</option>
+                                                        <option value="3">Wednesday</option>
+                                                        <option value="4">Thursday</option>
+                                                        <option value="5">Friday</option>
+                                                        <option value="6">Saturday</option>
+                                                        <option value="0">Sunday</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="mini-note"><small>Cron applied to this workflow.</small></div>
+                                        </div>
+                                        <div class="panel-trigger" style="display:none;">
+                                            <input type="hidden" class="trigger-input" value="">
+                                            <div class="providers"></div>
+                                            <div class="trigger-list"></div>
+                                        </div>
+                                        <div style="margin-top:8px;">
+                                            <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                });
+                } else {
+                    // Show a mock workflow with editable mock schedule (UI-only)
+                    const mockName = 'Mock: Account Plan Orchestration';
+                    const cron = this.getMockSchedule(mockName) || '0 9 * * *';
+                    content = `
+                        <div class="workflow-item" data-mock="true" data-name="${mockName}">
+                            <div class="workflow-header">
+                                <div class="workflow-name">${mockName}</div>
+                                <div class="workflow-status active">Mock</div>
+                            </div>
+                            <div class="workflow-details">
+                                <div><strong>Schedule (mock):</strong> <code>${cron}</code></div>
+                                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                                    <a href="#" class="secondary-button btn-edit-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-clock"></i> Edit Schedule</a>
+                                </div>
+                                <div class="edit-schedule" style="display:none; margin-top:8px;">
+                                    <div class="mini-tabs">
+                                        <button type="button" class="tab tab-schedule active">Schedule</button>
+                                        <button type="button" class="tab tab-trigger">Trigger</button>
+                                    </div>
+                                    <div class="panel-schedule">
+                                        <input type="hidden" class="cron-input" value="${cron}">
                                         <div class="mini-scheduler">
                                             <div class="mini-row">
                                                 <label>Frequency</label>
@@ -685,61 +772,16 @@ class Dashboard {
                                                 </select>
                                             </div>
                                         </div>
-                                        <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
-                                        <div class="mini-note"><small>Cron applied to this workflow.</small></div>
+                                        <div class="mini-note"><small>UI-only mock schedule. No server changes.</small></div>
                                     </div>
-                                </div>
-                            </div>`;
-                });
-                } else {
-                    // Show a mock workflow with editable mock schedule (UI-only)
-                    const mockName = 'Mock: Account Plan Orchestration';
-                    const cron = this.getMockSchedule(mockName) || '0 9 * * *';
-                    content = `
-                        <div class="workflow-item" data-mock="true" data-name="${mockName}">
-                            <div class="workflow-header">
-                                <div class="workflow-name">${mockName}</div>
-                                <div class="workflow-status active">Mock</div>
-                            </div>
-                            <div class="workflow-details">
-                                <div><strong>Schedule (mock):</strong> <code>${cron}</code></div>
-                                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                                    <a href="#" class="secondary-button btn-edit-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-clock"></i> Edit Schedule</a>
-                                </div>
-                                <div class="edit-schedule" style="display:none; margin-top:8px;">
-                                    <input type="hidden" class="cron-input" value="${cron}">
-                                    <div class="mini-scheduler">
-                                        <div class="mini-row">
-                                            <label>Frequency</label>
-                                            <div class="segmented">
-                                                <button type="button" class="seg" data-mode="weekly">Weekly</button>
-                                                <button type="button" class="seg" data-mode="daily">Daily</button>
-                                                <button type="button" class="seg" data-mode="hourly">Hourly</button>
-                                            </div>
-                                        </div>
-                                        <div class="mini-row time-row">
-                                            <label>Time</label>
-                                            <select class="time-select"></select>
-                                            <select class="tz-select">
-                                                <option value="Local">Local</option>
-                                                <option value="UTC">UTC</option>
-                                            </select>
-                                        </div>
-                                        <div class="mini-row dow-row">
-                                            <label>Day</label>
-                                            <select class="dow-select">
-                                                <option value="1">Monday</option>
-                                                <option value="2">Tuesday</option>
-                                                <option value="3">Wednesday</option>
-                                                <option value="4">Thursday</option>
-                                                <option value="5">Friday</option>
-                                                <option value="6">Saturday</option>
-                                                <option value="0">Sunday</option>
-                                            </select>
-                                        </div>
+                                    <div class="panel-trigger" style="display:none;">
+                                        <input type="hidden" class="trigger-input" value="">
+                                        <div class="providers"></div>
+                                        <div class="trigger-list"></div>
                                     </div>
-                                    <button class="primary-button btn-save-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-save"></i> Save</button>
-                                    <div class="mini-note"><small>UI-only mock schedule. No server changes.</small></div>
+                                    <div style="margin-top:8px;">
+                                        <button class="primary-button btn-save-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-save"></i> Save</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -838,6 +880,10 @@ class Dashboard {
     // Initialize the mini scheduler controls inside an edit panel
     initMiniScheduler(panel) {
         const cronInput = panel.querySelector('.cron-input');
+        // Setup tabs
+        this.initMiniTabs(panel);
+        // Setup trigger panel
+        this.initMiniTriggers(panel);
         const segBtns = panel.querySelectorAll('.segmented .seg');
         const timeSel = panel.querySelector('.time-select');
         const tzSel = panel.querySelector('.tz-select');
@@ -929,6 +975,99 @@ class Dashboard {
 
         // Ensure cron reflects initial UI
         syncFromUI();
+    }
+
+    initMiniTabs(panel) {
+        const tabSchedule = panel.querySelector('.tab-schedule');
+        const tabTrigger = panel.querySelector('.tab-trigger');
+        const panelSchedule = panel.querySelector('.panel-schedule');
+        const panelTrigger = panel.querySelector('.panel-trigger');
+        if (!tabSchedule || !tabTrigger || !panelSchedule || !panelTrigger) return;
+
+        const setActive = (which) => {
+            const isSchedule = which === 'schedule';
+            tabSchedule.classList.toggle('active', isSchedule);
+            tabTrigger.classList.toggle('active', !isSchedule);
+            panelSchedule.style.display = isSchedule ? 'block' : 'none';
+            panelTrigger.style.display = isSchedule ? 'none' : 'block';
+        };
+        tabSchedule.addEventListener('click', () => setActive('schedule'));
+        tabTrigger.addEventListener('click', () => setActive('trigger'));
+        setActive('schedule');
+    }
+
+    initMiniTriggers(panel) {
+        const providersDiv = panel.querySelector('.providers');
+        const listDiv = panel.querySelector('.trigger-list');
+        const hidden = panel.querySelector('.trigger-input');
+        if (!providersDiv || !listDiv || !hidden) return;
+
+        const item = panel.closest('.workflow-item');
+        const key = item?.dataset.name || item?.dataset.id || 'mock';
+        const saved = this.getTriggerSelection(key);
+
+        const PROVIDERS = {
+            gmail: ['New Email', 'From VIP', 'Has Attachment'],
+            googleCalendar: ['New Event', 'Event Updated', 'Reminder 15m'],
+            googleDrive: ['New File Uploaded', 'File Updated', 'Folder Shared'],
+            slack: ['New Message in Channel', 'Mention', 'Reaction Added'],
+            notion: ['Page Created', 'Page Updated', 'Database Item Updated']
+        };
+
+        const providerOrder = ['gmail','googleCalendar','googleDrive','slack','notion'];
+
+        const renderProviders = (active) => {
+            providersDiv.innerHTML = '';
+            providerOrder.forEach(p => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'provider-chip' + (p === active ? ' active' : '');
+                b.dataset.provider = p;
+                b.textContent = {
+                    gmail: 'Gmail', googleCalendar: 'Google Calendar', googleDrive: 'Google Drive', slack: 'Slack', notion: 'Notion'
+                }[p] || p;
+                b.addEventListener('click', () => {
+                    renderProviders(p);
+                    renderTriggers(p, null);
+                });
+                providersDiv.appendChild(b);
+            });
+        };
+
+        const renderTriggers = (provider, selected) => {
+            listDiv.innerHTML = '';
+            (PROVIDERS[provider] || []).forEach(name => {
+                const c = document.createElement('button');
+                c.type = 'button';
+                c.className = 'trigger-chip' + (name === selected ? ' active' : '');
+                c.textContent = name;
+                c.addEventListener('click', () => {
+                    Array.from(listDiv.querySelectorAll('.trigger-chip')).forEach(el => el.classList.remove('active'));
+                    c.classList.add('active');
+                    hidden.value = JSON.stringify({ provider, event: name });
+                });
+                listDiv.appendChild(c);
+            });
+
+            // Update hidden if we have a preselect
+            if (selected) hidden.value = JSON.stringify({ provider, event: selected });
+        };
+
+        // Initialize with saved or default
+        const initProvider = saved?.provider || 'gmail';
+        renderProviders(initProvider);
+        renderTriggers(initProvider, saved?.event || (PROVIDERS[initProvider] ? PROVIDERS[initProvider][0] : ''));
+    }
+
+    getTriggerSelection(key) {
+        try {
+            const raw = localStorage.getItem(`mock-trigger:${key}`);
+            return raw ? JSON.parse(raw) : null;
+        } catch (_) { return null; }
+    }
+
+    saveTriggerSelection(key, value) {
+        try { localStorage.setItem(`mock-trigger:${key}`, JSON.stringify(value)); } catch (_) {}
     }
 
     async toggleWorkflow(id, enabled) {

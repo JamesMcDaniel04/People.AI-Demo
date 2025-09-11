@@ -546,6 +546,19 @@ body {
 .mini-scheduler select { padding: 6px 8px; border: 1px solid #d9e2ec; border-radius: 6px; }
 .mini-note { color: #7f8c8d; font-size: 12px; }
 
+/* Tabs inside edit panel */
+.mini-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.mini-tabs .tab { border: 1px solid #d9e2ec; background: #f5f8fb; color: #34495e; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.mini-tabs .tab.active { background: #667eea; color: #fff; border-color: #667eea; }
+
+/* Trigger provider chips */
+.providers { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.provider-chip { border: 1px solid #d9e2ec; background: #fff; color: #34495e; padding: 6px 10px; border-radius: 16px; cursor: pointer; font-weight: 600; }
+.provider-chip.active { background: #e8eafe; border-color: #667eea; color: #2c3e50; }
+.trigger-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.trigger-chip { border: 1px solid #d9e2ec; background: #fff; padding: 6px 10px; border-radius: 16px; cursor: pointer; }
+.trigger-chip.active { background: #667eea; color: #fff; border-color: #667eea; }
+
 /* Loading States */
 .loading {
     text-align: center;
