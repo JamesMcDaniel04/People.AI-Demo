@@ -124,11 +124,18 @@ class Dashboard {
             return;
         }
         if (saveBtn) {
-            if (saveBtn.dataset.name) {
+            // Mock-only save (UI)
+            if (saveBtn.dataset.mock === 'true') {
+                const item = saveBtn.closest('.workflow-item');
+                const input = item?.querySelector('.edit-schedule .cron-input');
+                if (input) await this.saveMockSchedule(saveBtn.dataset.name, input.value);
+            } else if (saveBtn.dataset.name) {
+                // BullMQ schedule update by name
                 const item = saveBtn.closest('.workflow-item');
                 const input = item?.querySelector('.edit-schedule .cron-input');
                 if (input) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, input.value);
             } else {
+                // Orchestrator workflow by id
                 const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
                 const input = panel?.querySelector('.cron-input');
                 if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
@@ -618,13 +625,25 @@ class Dashboard {
                             </div>`;
                 });
                 } else {
+                    // Show a mock workflow with editable mock schedule (UI-only)
+                    const mockName = 'Mock: Account Plan Orchestration';
+                    const cron = this.getMockSchedule(mockName) || '0 9 * * *';
                     content = `
-                        <div class="workflow-item">
+                        <div class="workflow-item" data-mock="true" data-name="${mockName}">
                             <div class="workflow-header">
-                                <div class="workflow-name">No workflows or schedules found</div>
+                                <div class="workflow-name">${mockName}</div>
+                                <div class="workflow-status active">Mock</div>
                             </div>
                             <div class="workflow-details">
-                                Create your first workflow using the "Create Workflow" button above.
+                                <div><strong>Schedule (mock):</strong> <code>${cron}</code></div>
+                                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                                    <a href="#" class="secondary-button btn-edit-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-clock"></i> Edit Schedule</a>
+                                </div>
+                                <div class="edit-schedule" style="display:none; margin-top:8px;">
+                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${cron}" style="width:220px;">
+                                    <button class="primary-button btn-save-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-save"></i> Save</button>
+                                    <div><small>UI-only mock schedule. No server changes.</small></div>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -695,6 +714,27 @@ class Dashboard {
             alert(`Failed to update schedule: ${err.message}`);
         } finally {
             this.hideLoading();
+        }
+    }
+
+    // Mock schedule helpers (UI-only)
+    getMockSchedule(name) {
+        try {
+            const key = `mock-schedule:${name}`;
+            return localStorage.getItem(key);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    async saveMockSchedule(name, cron) {
+        try {
+            const key = `mock-schedule:${name}`;
+            localStorage.setItem(key, cron);
+            await this.loadWorkflows();
+            alert('Mock schedule updated.');
+        } catch (err) {
+            alert(`Failed to save mock schedule: ${err.message}`);
         }
     }
 
