@@ -4,6 +4,7 @@ import { WorkflowOrchestrator } from '../workflows/workflowOrchestrator.js';
 import { createDemoAPI } from './demoAPI.js';
 import { createGraphAPI } from './graphAPI.js';
 import { createAuthAPI } from './authAPI.js';
+import { createSettingsAPI } from './settingsAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
@@ -133,6 +134,9 @@ export class WorkflowAPI {
     
     // Graph API routes (Neo4j Knowledge Graph)
     this.app.use('/graph', createGraphAPI(this.orchestrator, this.orchestrator.dataManager, this.config));
+
+    // Settings API (UI configuration, prompts, scheduling preferences)
+    this.app.use('/settings', createSettingsAPI(this.orchestrator, this.config));
 
     // robots.txt (avoid 404 noise in browsers/crawlers)
     this.app.get('/robots.txt', (_req, res) => {

@@ -23,8 +23,14 @@ class Dashboard {
         // Refresh buttons
         document.querySelectorAll('.refresh-btn').forEach(button => {
             button.addEventListener('click', (e) => {
-                const endpoint = e.target.closest('.refresh-btn').dataset.endpoint;
-                this.refreshEndpoint(endpoint);
+                const btn = e.target.closest('.refresh-btn');
+                const endpoint = btn?.dataset?.endpoint;
+                const action = btn?.dataset?.action;
+                if (endpoint) {
+                    this.refreshEndpoint(endpoint);
+                } else if (action === 'load-settings') {
+                    this.loadSettings();
+                }
             });
         });
 
@@ -53,6 +59,11 @@ class Dashboard {
 
         // Load tab-specific data
         this.loadTabData(tabName);
+
+        // Lazy load settings
+        if (tabName === 'settings') {
+            this.loadSettings();
+        }
     }
 
     async loadTabData(tabName) {
@@ -68,6 +79,9 @@ class Dashboard {
                 break;
             case 'integration':
                 await this.loadIntegrationStatus();
+                break;
+            case 'settings':
+                await this.loadSettings();
                 break;
         }
     }
@@ -508,9 +522,108 @@ class Dashboard {
             </div>
         `;
     }
+
+    // SETTINGS
+    async loadSettings() {
+        try {
+            const res = await fetch('/settings');
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to load settings');
+
+            const cur = data.current;
+            // AI
+            document.getElementById('aiProvider').value = cur.ai.provider;
+            document.getElementById('aiTemperature').value = cur.ai.temperature;
+            document.getElementById('aiSystemPrompt').value = cur.ai.systemPrompt || '';
+            document.getElementById('aiToolSystemPrompt').value = cur.ai.toolSystemPrompt || '';
+            // Data/MCP
+            document.getElementById('dataSource').value = cur.data.source;
+            const servers = cur.data.mcp?.servers || {};
+            document.getElementById('mcpGmail').checked = !!servers.gmail?.enabled;
+            document.getElementById('mcpCalendar').checked = !!servers.googleCalendar?.enabled;
+            document.getElementById('mcpDrive').checked = !!servers.googleDrive?.enabled;
+            document.getElementById('mcpSlack').checked = !!servers.slack?.enabled;
+            document.getElementById('mcpNotion').checked = !!servers.notion?.enabled;
+            // Logging
+            document.getElementById('logLevel').value = cur.logging.level || 'info';
+        } catch (err) {
+            console.error('Failed to load settings', err);
+        }
+    }
+
+    collectSettingsPayload() {
+        const aiProvider = document.getElementById('aiProvider').value;
+        const aiTemperature = parseFloat(document.getElementById('aiTemperature').value || '0.1');
+        const aiSystemPrompt = document.getElementById('aiSystemPrompt').value;
+        const aiToolSystemPrompt = document.getElementById('aiToolSystemPrompt').value;
+        const dataSource = document.getElementById('dataSource').value;
+        const logLevel = document.getElementById('logLevel').value;
+
+        const mcp = {
+            servers: {
+                gmail: { enabled: document.getElementById('mcpGmail').checked },
+                googleCalendar: { enabled: document.getElementById('mcpCalendar').checked },
+                googleDrive: { enabled: document.getElementById('mcpDrive').checked },
+                slack: { enabled: document.getElementById('mcpSlack').checked },
+                notion: { enabled: document.getElementById('mcpNotion').checked }
+            }
+        };
+
+        return {
+            ai: {
+                provider: aiProvider,
+                temperature: aiTemperature,
+                systemPrompt: aiSystemPrompt,
+                toolSystemPrompt: aiToolSystemPrompt
+            },
+            data: {
+                source: dataSource
+            },
+            mcp,
+            logging: { level: logLevel }
+        };
+    }
+
+    async saveSettings() {
+        const payload = this.collectSettingsPayload();
+        try {
+            this.showLoading();
+            const res = await fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to save settings');
+            alert('Settings saved. Click Apply & Reload to take effect.');
+        } catch (err) {
+            alert(`Failed to save settings: ${err.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async applySettings() {
+        try {
+            this.showLoading();
+            const res = await fetch('/settings/reload', { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to apply settings');
+            alert('Settings applied and services reloaded.');
+            await this.loadSystemData();
+        } catch (err) {
+            alert(`Failed to apply settings: ${err.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
 }
 
 // Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new Dashboard();
+    const d = new Dashboard();
+    const saveBtn = document.getElementById('saveSettingsBtn');
+    const applyBtn = document.getElementById('applySettingsBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => d.saveSettings());
+    if (applyBtn) applyBtn.addEventListener('click', () => d.applySettings());
 });

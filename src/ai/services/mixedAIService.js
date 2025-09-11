@@ -65,7 +65,7 @@ export class MixedAIService {
   }
 
   async generateClaudeCompletion(prompt, model, options = {}) {
-    const systemMessage = 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. Provide detailed, actionable insights based on the data provided. Always respond with valid JSON when requested.';
+    const systemMessage = this.config?.ai?.systemPrompt || 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. Provide detailed, actionable insights based on the data provided. Always respond with valid JSON when requested.';
     
     const response = await this.anthropic.messages.create({
       model: model,
@@ -89,7 +89,7 @@ export class MixedAIService {
       messages: [
         {
           role: 'system',
-          content: 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. Provide detailed, actionable insights based on the data provided. Always respond with valid JSON when requested.'
+          content: this.config?.ai?.systemPrompt || 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. Provide detailed, actionable insights based on the data provided. Always respond with valid JSON when requested.'
         },
         {
           role: 'user',
@@ -111,7 +111,7 @@ export class MixedAIService {
     const messages = [
       {
         role: 'system',
-        content: 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. You have access to various tools for accessing email, calendar, documents, and other data sources. Use these tools when relevant to provide comprehensive insights.'
+        content: this.config?.ai?.toolSystemPrompt || 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. You have access to various tools for accessing email, calendar, documents, and other data sources. Use these tools when relevant to provide comprehensive insights.'
       },
       {
         role: 'user',
@@ -157,7 +157,7 @@ export class MixedAIService {
   async generateClaudeCompletionWithTools(prompt, model, options = {}) {
     const tools = await this.toolIntegration.getClaudeTools();
     
-    const systemMessage = 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. You have access to various tools for accessing email, calendar, documents, and other data sources. Use these tools when relevant to provide comprehensive insights.';
+    const systemMessage = this.config?.ai?.toolSystemPrompt || 'You are an expert AI assistant specialized in B2B account planning, sales strategy, and business analysis. You have access to various tools for accessing email, calendar, documents, and other data sources. Use these tools when relevant to provide comprehensive insights.';
 
     let response = await this.anthropic.messages.create({
       model: model,

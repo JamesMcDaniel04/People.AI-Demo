@@ -35,6 +35,7 @@
                 <button class="tab-button" data-tab="queues">Queues</button>
                 <button class="tab-button" data-tab="workflows">Workflows</button>
                 <button class="tab-button" data-tab="integration">Integration</button>
+                <button class="tab-button" data-tab="settings">Settings</button>
             </nav>
 
             <!-- Demo Tab -->
@@ -116,6 +117,109 @@
                     
                     <div class="queue-stats" id="queueStats">
                         <div class="loading">Loading queue statistics...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-sliders-h"></i> Settings</h2>
+                        <p>Configure AI prompts, data source, MCPs and logging</p>
+                    </div>
+
+                    <div class="system-grid">
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-robot"></i> AI Instructions</h3>
+                                <div class="header-actions">
+                                    <button class="refresh-btn" data-action="load-settings"><i class="fas fa-sync-alt"></i></button>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="aiProvider">Provider</label>
+                                    <select id="aiProvider">
+                                        <option value="mixed">Mixed</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiTemperature">Temperature</label>
+                                    <input type="number" step="0.1" min="0" max="1" id="aiTemperature" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiSystemPrompt">System Prompt</label>
+                                    <textarea id="aiSystemPrompt" placeholder="Customize the assistant instruction"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiToolSystemPrompt">Tool System Prompt</label>
+                                    <textarea id="aiToolSystemPrompt" placeholder="Customize the tool-enabled instruction"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-database"></i> Data & MCP</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="dataSource">Data Source</label>
+                                    <select id="dataSource">
+                                        <option value="sample">Sample (no keys)</option>
+                                        <option value="mcp">MCP (Klavis)</option>
+                                        <option value="external">External (News/API)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>MCP Servers</label>
+                                    <div>
+                                        <label><input type="checkbox" id="mcpGmail" /> Gmail</label>
+                                    </div>
+                                    <div>
+                                        <label><input type="checkbox" id="mcpCalendar" /> Google Calendar</label>
+                                    </div>
+                                    <div>
+                                        <label><input type="checkbox" id="mcpDrive" /> Google Drive</label>
+                                    </div>
+                                    <div>
+                                        <label><input type="checkbox" id="mcpSlack" /> Slack</label>
+                                    </div>
+                                    <div>
+                                        <label><input type="checkbox" id="mcpNotion" /> Notion</label>
+                                    </div>
+                                    <small>Changes to data source/MCPs may require reload.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-bug"></i> Error Handling</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="logLevel">Log Level</label>
+                                    <select id="logLevel">
+                                        <option value="error">error</option>
+                                        <option value="warn">warn</option>
+                                        <option value="info">info</option>
+                                        <option value="debug">debug</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <small>Advanced error handling settings can be configured via environment variables for now.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 1rem;">
+                        <button class="secondary-button" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+                        <button class="primary-button" id="applySettingsBtn"><i class="fas fa-refresh"></i> Apply & Reload</button>
                     </div>
                 </div>
             </div>

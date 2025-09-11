@@ -1,5 +1,37 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 dotenv.config();
+
+// Load optional settings overrides from data/settings.json
+function loadSettingsFile() {
+  try {
+    const p = path.resolve(process.cwd(), 'data/settings.json');
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    // ignore parse or fs errors, fall back to env/defaults
+  }
+  return {};
+}
+
+function deepMerge(target, source) {
+  if (!source || typeof source !== 'object') return target;
+  for (const key of Object.keys(source)) {
+    const srcVal = source[key];
+    const tgtVal = target[key];
+    if (Array.isArray(srcVal)) {
+      target[key] = srcVal.slice();
+    } else if (srcVal && typeof srcVal === 'object') {
+      target[key] = deepMerge(tgtVal && typeof tgtVal === 'object' ? { ...tgtVal } : {}, srcVal);
+    } else {
+      target[key] = srcVal;
+    }
+  }
+  return target;
+}
 
 export const config = {
   // Application settings
@@ -95,6 +127,9 @@ export const config = {
       recommendations: process.env.AI_RECOMMENDATIONS_MODEL || 'gpt-4o',
       insights: process.env.AI_INSIGHTS_MODEL || 'claude-3-5-sonnet-20241022'
     },
+    // Optional customizable prompts (overridable via settings file)
+    systemPrompt: process.env.AI_SYSTEM_PROMPT,
+    toolSystemPrompt: process.env.AI_TOOL_SYSTEM_PROMPT,
     maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4000,
     temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.1,
     features: {
@@ -215,3 +250,7 @@ export const config = {
     enableEncryption: process.env.SECURITY_ENCRYPTION_ENABLED === 'true' || false
   }
 };
+
+// Apply settings overrides from file (if present)
+const fileOverrides = loadSettingsFile();
+deepMerge(config, fileOverrides);
