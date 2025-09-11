@@ -90,6 +90,55 @@ class Dashboard {
         if (pplOpen) pplOpen.addEventListener('click', () => this.showPeopleAIModal());
         if (pplClose) pplClose.addEventListener('click', () => this.hidePeopleAIModal());
         if (pplSave) pplSave.addEventListener('click', () => this.savePeopleAIConfig());
+
+        // Centralized click handling for workflows list
+        const workflowsList = document.getElementById('workflowsList');
+        if (workflowsList) {
+            workflowsList.addEventListener('click', (e) => this.handleWorkflowsListClick(e));
+        }
+    }
+
+    // Handle clicks on workflow actions (run/edit/save/toggle)
+    async handleWorkflowsListClick(e) {
+        const runBtn = e.target.closest('.btn-run');
+        const editBtn = e.target.closest('.btn-edit-schedule');
+        const saveBtn = e.target.closest('.btn-save-schedule');
+        const toggleBtn = e.target.closest('.btn-toggle');
+
+        if (!runBtn && !editBtn && !saveBtn && !toggleBtn) return;
+        e.preventDefault();
+
+        if (runBtn) {
+            await this.runWorkflow(runBtn.dataset.id);
+            return;
+        }
+        if (editBtn) {
+            if (editBtn.dataset.name) {
+                const item = editBtn.closest('.workflow-item');
+                const panel = item?.querySelector('.edit-schedule');
+                if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            } else {
+                const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
+                if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            }
+            return;
+        }
+        if (saveBtn) {
+            if (saveBtn.dataset.name) {
+                const item = saveBtn.closest('.workflow-item');
+                const input = item?.querySelector('.edit-schedule .cron-input');
+                if (input) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, input.value);
+            } else {
+                const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
+                const input = panel?.querySelector('.cron-input');
+                if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
+            }
+            return;
+        }
+        if (toggleBtn) {
+            await this.toggleWorkflow(toggleBtn.dataset.id, toggleBtn.dataset.next === 'true');
+            return;
+        }
     }
 
     // Initialize a schedule builder that outputs cron
@@ -520,7 +569,7 @@ class Dashboard {
                                 <div><strong>Schedule:</strong> <code>${cron}</code></div>
                                 ${created ? `<div><strong>Scheduled:</strong> ${created}</div>` : ''}
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                                    <a class="secondary-button btn-edit-schedule" data-name="${name}"><i class="fas fa-clock"></i> Edit Schedule</a>
+                                    <a href="#" class="secondary-button btn-edit-schedule" data-name="${name}"><i class="fas fa-clock"></i> Edit Schedule</a>
                                     <a class="primary-button" href="/admin/queues/queue/scheduled-workflows"><i class="fas fa-list"></i> View Details</a>
                                 </div>
                                 <div class="edit-schedule" style="display:none; margin-top:8px;">
@@ -583,40 +632,6 @@ class Dashboard {
             }
 
             document.getElementById('workflowsList').innerHTML = content;
-
-            // Attach action handlers for orchestrator workflows
-            document.getElementById('workflowsList').addEventListener('click', async (e) => {
-                const runBtn = e.target.closest('.btn-run');
-                const editBtn = e.target.closest('.btn-edit-schedule');
-                const saveBtn = e.target.closest('.btn-save-schedule');
-                const toggleBtn = e.target.closest('.btn-toggle');
-                if (runBtn) {
-                    await this.runWorkflow(runBtn.dataset.id);
-                } else if (editBtn) {
-                    // If editing BullMQ schedule (by name), find panel relative to item
-                    if (editBtn.dataset.name) {
-                        const item = editBtn.closest('.workflow-item');
-                        const panel = item?.querySelector('.edit-schedule');
-                        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-                    } else {
-                        const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
-                        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-                    }
-                } else if (saveBtn) {
-                    if (saveBtn.dataset.name) {
-                        // BullMQ schedule update by name
-                        const item = saveBtn.closest('.workflow-item');
-                        const input = item?.querySelector('.edit-schedule .cron-input');
-                        if (input) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, input.value);
-                    } else {
-                        const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
-                        const input = panel?.querySelector('.cron-input');
-                        if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
-                    }
-                } else if (toggleBtn) {
-                    await this.toggleWorkflow(toggleBtn.dataset.id, toggleBtn.dataset.next === 'true');
-                }
-            });
         } catch (error) {
             document.getElementById('workflowsList').innerHTML = `
                 <div class="workflow-item">
