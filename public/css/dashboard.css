@@ -559,6 +559,11 @@ body {
 .trigger-chip { border: 1px solid #d9e2ec; background: #fff; padding: 6px 10px; border-radius: 16px; cursor: pointer; }
 .trigger-chip.active { background: #667eea; color: #fff; border-color: #667eea; }
 
+/* Schedule summary chips */
+.schedule-summary { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.summary-chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 14px; background: #eef3f6; border: 1px solid #d9e2ec; color: #34495e; font-weight: 600; cursor: pointer; }
+.summary-chip:hover { background: #e2e8ee; }
+
 /* Loading States */
 .loading {
     text-align: center;

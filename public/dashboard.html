@@ -279,37 +279,41 @@
                                     <label>Account</label>
                                     <input type="text" id="demoWorkflowAccount" value="stripe">
                                 </div>
-                                <input type="hidden" id="demoWorkflowSchedule">
                                 <div class="form-group">
-                                    <label>Schedule Type:</label>
-                                    <select id="demoScheduleType">
-                                        <option value="">Custom (Cron)</option>
-                                        <option value="hourly">Hourly</option>
-                                        <option value="daily">Daily</option>
-                                        <option value="weekly">Weekly</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" id="demoScheduleBuilder" style="display:none;">
-                                    <div id="demoBuilderHourly" style="display:none;">
-                                        <div>Runs every hour at :00</div>
-                                    </div>
-                                    <div id="demoBuilderDaily" style="display:none;">
-                                        <label>Time:</label>
-                                        <select id="demoScheduleHour"></select> : <select id="demoScheduleMinuteDaily"></select>
-                                    </div>
-                                    <div id="demoBuilderWeekly" style="display:none;">
-                                        <label>Day:</label>
-                                        <select id="demoScheduleDOW">
-                                            <option value="1">Mon</option>
-                                            <option value="2">Tue</option>
-                                            <option value="3">Wed</option>
-                                            <option value="4">Thu</option>
-                                            <option value="5">Fri</option>
-                                            <option value="6">Sat</option>
-                                            <option value="0">Sun</option>
-                                        </select>
-                                        <label style="margin-left:8px;">Time:</label>
-                                        <select id="demoScheduleHourWeekly"></select> : <select id="demoScheduleMinuteWeekly"></select>
+                                    <label>Schedule (optional)</label>
+                                    <div id="demoMiniSchedulerPanel">
+                                        <input type="hidden" id="demoWorkflowSchedule" class="cron-input" value="">
+                                        <div class="mini-scheduler">
+                                            <div class="mini-row">
+                                                <label>Frequency</label>
+                                                <div class="segmented">
+                                                    <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                    <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                    <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                                </div>
+                                            </div>
+                                            <div class="mini-row time-row">
+                                                <label>Time</label>
+                                                <select class="time-select"></select>
+                                                <select class="tz-select">
+                                                    <option value="Local">Local</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
+                                            </div>
+                                            <div class="mini-row dow-row">
+                                                <label>Day</label>
+                                                <select class="dow-select">
+                                                    <option value="1">Monday</option>
+                                                    <option value="2">Tuesday</option>
+                                                    <option value="3">Wednesday</option>
+                                                    <option value="4">Thursday</option>
+                                                    <option value="5">Friday</option>
+                                                    <option value="6">Saturday</option>
+                                                    <option value="0">Sunday</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="mini-note"><small>Schedule is optional. Leave empty for manual runs.</small></div>
                                     </div>
                                 </div>
                                 <div class="form-actions">

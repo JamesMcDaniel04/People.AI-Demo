@@ -11,6 +11,8 @@ class Dashboard {
         // Load initial data for visible tabs
         await this.loadWorkflows();
         await this.loadQueueStats();
+        // Initialize demo mini scheduler UI (optional schedule)
+        this.initDemoMiniScheduler();
     }
 
     setupEventListeners() {
@@ -98,6 +100,14 @@ class Dashboard {
         }
     }
 
+    initDemoMiniScheduler() {
+        const panel = document.getElementById('demoMiniSchedulerPanel');
+        if (panel && !panel.dataset.inited) {
+            this.initMiniScheduler(panel);
+            panel.dataset.inited = '1';
+        }
+    }
+
     // Handle clicks on workflow actions (run/edit/save/toggle)
     async handleWorkflowsListClick(e) {
         const runBtn = e.target.closest('.btn-run');
@@ -110,6 +120,31 @@ class Dashboard {
 
         if (runBtn) {
             await this.runWorkflow(runBtn.dataset.id);
+            return;
+        }
+        // Clicking summary chips opens the editor at the right control
+        const chip = e.target.closest('.summary-chip');
+        if (chip) {
+            const item = chip.closest('.workflow-item');
+            const editBtnInline = item.querySelector('.btn-edit-schedule');
+            if (editBtnInline) {
+                editBtnInline.click();
+                setTimeout(() => {
+                    const panel = item.querySelector('.edit-schedule');
+                    if (!panel) return;
+                    // Ensure schedule tab is active
+                    const tabSchedule = panel.querySelector('.tab-schedule');
+                    if (tabSchedule && !tabSchedule.classList.contains('active')) tabSchedule.click();
+                    const target = chip.dataset.open;
+                    if (target === 'time') {
+                        panel.querySelector('.time-select')?.focus();
+                    } else if (target === 'day') {
+                        panel.querySelector('.dow-select')?.focus();
+                    } else if (target === 'frequency') {
+                        panel.querySelector('.segmented .seg.active')?.focus();
+                    }
+                }, 0);
+            }
             return;
         }
         if (editBtn) {
@@ -583,7 +618,7 @@ class Dashboard {
                                 <div class="workflow-status active">Active</div>
                             </div>
                             <div class="workflow-details">
-                                <div><strong>Schedule:</strong> <code>${cron}</code></div>
+                                <div><strong>Schedule:</strong> ${this.scheduleSummaryHTML(cron)}</div>
                                 ${created ? `<div><strong>Scheduled:</strong> ${created}</div>` : ''}
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                                     <a href="#" class="secondary-button btn-edit-schedule" data-name="${name}"><i class="fas fa-clock"></i> Edit Schedule</a>
@@ -647,7 +682,7 @@ class Dashboard {
                 if (data.workflows && data.workflows.length > 0) {
                     data.workflows.forEach(workflow => {
                         const scheduleLine = workflow.trigger?.type === 'schedule' && workflow.schedule ? `
-                            <div><strong>Schedule:</strong> <code>${workflow.schedule}</code></div>` : '';
+                            <div><strong>Schedule:</strong> ${this.scheduleSummaryHTML(workflow.schedule)}</div>` : '';
                         const lastRunLine = workflow.lastRun ? `<div><strong>Last Run:</strong> ${new Date(workflow.lastRun).toLocaleString()}</div>` : '';
                         content += `
                             <div class="workflow-item" data-id="${workflow.id}" data-enabled="${workflow.enabled}">
@@ -731,7 +766,7 @@ class Dashboard {
                                 <div class="workflow-status active">Mock</div>
                             </div>
                             <div class="workflow-details">
-                                <div><strong>Schedule (mock):</strong> <code>${cron}</code></div>
+                                <div><strong>Schedule (mock):</strong> ${this.scheduleSummaryHTML(cron)}</div>
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                                     <a href="#" class="secondary-button btn-edit-schedule" data-mock="true" data-name="${mockName}"><i class="fas fa-clock"></i> Edit Schedule</a>
                                 </div>
@@ -975,6 +1010,58 @@ class Dashboard {
 
         // Ensure cron reflects initial UI
         syncFromUI();
+    }
+
+    // Build compact human-readable schedule chips from a cron expression
+    scheduleSummaryHTML(cron) {
+        try {
+            const { mode, h, m, dow } = this.parseCronString(cron);
+            const tz = this.getLocalTzAbbr();
+            const chips = [];
+            const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+            chips.push(`<span class=\"summary-chip\" data-open=\"frequency\">${modeLabel}</span>`);
+            if (mode !== 'hourly') {
+                chips.push(`<span class=\"summary-chip\" data-open=\"time\">${this.formatTimeLabel(h, m)} ${tz}</span>`);
+            }
+            if (mode === 'weekly') {
+                chips.push(`<span class=\"summary-chip\" data-open=\"day\">${this.dayName(dow)}</span>`);
+            }
+            return `<span class=\"schedule-summary\" data-cron=\"${cron}\">${chips.join(' ')}</span>`;
+        } catch (_) {
+            return `<span class=\"schedule-summary\"><span class=\"summary-chip\">Custom</span></span>`;
+        }
+    }
+
+    parseCronString(cron) {
+        const parts = (cron || '').trim().split(/\s+/);
+        if (parts.length < 5) return { mode: 'daily', h: 9, m: 0, dow: 1 };
+        const [min, hour, , , dow] = parts;
+        if (hour === '*' && dow === '*') return { mode: 'hourly', h: 0, m: 0 };
+        if (dow !== '*' && dow !== '?') return { mode: 'weekly', h: parseInt(hour)||9, m: parseInt(min)||0, dow: parseInt(dow)||1 };
+        return { mode: 'daily', h: parseInt(hour)||9, m: parseInt(min)||0 };
+    }
+
+    formatTimeLabel(h, m) {
+        const hour12 = (h % 12) === 0 ? 12 : (h % 12);
+        const ampm = h < 12 ? 'am' : 'pm';
+        const mm = (m || 0).toString().padStart(2, '0');
+        return `${hour12}:${mm}${ampm}`;
+    }
+
+    dayName(d) {
+        const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        if (typeof d !== 'number' || d < 0 || d > 6) return 'Monday';
+        return days[d];
+    }
+
+    getLocalTzAbbr() {
+        try {
+            const str = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).format(new Date());
+            const abbr = str.split(' ').pop();
+            return abbr && /[A-Z]{2,4}/.test(abbr) ? abbr : 'Local';
+        } catch (_) {
+            return 'Local';
+        }
     }
 
     initMiniTabs(panel) {
