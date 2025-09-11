@@ -60,7 +60,6 @@ class Dashboard {
             cronId: 'workflowSchedule',
             containerId: 'scheduleBuilder',
             fields: {
-                hourly: { minuteId: 'scheduleMinute' },
                 daily: { hourId: 'scheduleHour', minuteId: 'scheduleMinuteDaily' },
                 weekly: { dowId: 'scheduleDOW', hourId: 'scheduleHourWeekly', minuteId: 'scheduleMinuteWeekly' }
             }
@@ -72,7 +71,6 @@ class Dashboard {
             cronId: 'demoWorkflowSchedule',
             containerId: 'demoScheduleBuilder',
             fields: {
-                hourly: { minuteId: 'demoScheduleMinute' },
                 daily: { hourId: 'demoScheduleHour', minuteId: 'demoScheduleMinuteDaily' },
                 weekly: { dowId: 'demoScheduleDOW', hourId: 'demoScheduleHourWeekly', minuteId: 'demoScheduleMinuteWeekly' }
             }
@@ -116,7 +114,7 @@ class Dashboard {
 
         // Populate hours/minutes selects
         const f = cfg.fields;
-        if (f.hourly?.minuteId) fill(f.hourly.minuteId, 59);
+        // hourly has no minute selection; defaults to :00
         if (f.daily?.hourId) fill(f.daily.hourId, 23);
         if (f.daily?.minuteId) fill(f.daily.minuteId, 59);
         if (f.weekly?.hourId) fill(f.weekly.hourId, 23);
@@ -145,8 +143,8 @@ class Dashboard {
             if (!mode) return; // custom
             let cron = '* * * * *';
             if (mode === 'hourly') {
-                const m = document.getElementById(f.hourly.minuteId).value || '0';
-                cron = `${m} * * * *`;
+                // Always at :00 each hour
+                cron = `0 * * * *`;
             } else if (mode === 'daily') {
                 const h = document.getElementById(f.daily.hourId).value || '9';
                 const m = document.getElementById(f.daily.minuteId).value || '0';
@@ -508,12 +506,12 @@ class Dashboard {
             let content = '';
             if (schedRes.ok && schedData.success && Array.isArray(schedData.data) && schedData.data.length > 0) {
                 content += '<div class="workflow-item"><div class="workflow-header"><div class="workflow-name">Scheduled Workflows (BullMQ)</div></div><div class="workflow-details">Showing active schedules from the queue</div></div>';
-                schedData.data.forEach(s => {
+                schedData.data.forEach((s, idx) => {
                     const name = s.workflowConfig?.name || s.workflowId || s.jobName || 'Scheduled Workflow';
                     const cron = s.cronExpression || 'N/A';
                     const created = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
                     content += `
-                        <div class="workflow-item">
+                        <div class="workflow-item" data-name="${name}">
                             <div class="workflow-header">
                                 <div class="workflow-name"><a href="/admin/queues/queue/scheduled-workflows">${name}</a></div>
                                 <div class="workflow-status active">Active</div>
@@ -522,7 +520,13 @@ class Dashboard {
                                 <div><strong>Schedule:</strong> <code>${cron}</code></div>
                                 ${created ? `<div><strong>Scheduled:</strong> ${created}</div>` : ''}
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                                    <a class="secondary-button btn-edit-schedule" data-name="${name}"><i class="fas fa-clock"></i> Edit Schedule</a>
                                     <a class="primary-button" href="/admin/queues/queue/scheduled-workflows"><i class="fas fa-list"></i> View Details</a>
+                                </div>
+                                <div class="edit-schedule" style="display:none; margin-top:8px;">
+                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${cron}" style="width:220px;">
+                                    <button class="primary-button btn-save-schedule" data-name="${name}"><i class="fas fa-save"></i> Save</button>
+                                    <div><small>Use cron format.</small></div>
                                 </div>
                             </div>
                         </div>`;
@@ -589,12 +593,26 @@ class Dashboard {
                 if (runBtn) {
                     await this.runWorkflow(runBtn.dataset.id);
                 } else if (editBtn) {
-                    const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
-                    if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                    // If editing BullMQ schedule (by name), find panel relative to item
+                    if (editBtn.dataset.name) {
+                        const item = editBtn.closest('.workflow-item');
+                        const panel = item?.querySelector('.edit-schedule');
+                        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                    } else {
+                        const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
+                        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                    }
                 } else if (saveBtn) {
-                    const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
-                    const input = panel?.querySelector('.cron-input');
-                    if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
+                    if (saveBtn.dataset.name) {
+                        // BullMQ schedule update by name
+                        const item = saveBtn.closest('.workflow-item');
+                        const input = item?.querySelector('.edit-schedule .cron-input');
+                        if (input) await this.saveQueueWorkflowSchedule(saveBtn.dataset.name, input.value);
+                    } else {
+                        const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
+                        const input = panel?.querySelector('.cron-input');
+                        if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
+                    }
                 } else if (toggleBtn) {
                     await this.toggleWorkflow(toggleBtn.dataset.id, toggleBtn.dataset.next === 'true');
                 }
@@ -641,6 +659,25 @@ class Dashboard {
             alert('Schedule updated.');
         } catch (err) {
             alert(`Failed to save schedule: ${err.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async saveQueueWorkflowSchedule(name, cron) {
+        try {
+            this.showLoading();
+            const res = await fetch(`/queue/schedules/${encodeURIComponent(name)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cronExpression: cron })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Update failed');
+            await this.loadWorkflows();
+            alert('Schedule updated.');
+        } catch (err) {
+            alert(`Failed to update schedule: ${err.message}`);
         } finally {
             this.hideLoading();
         }
@@ -726,11 +763,15 @@ class Dashboard {
         event.preventDefault();
         
         const formData = new FormData(event.target);
+        const name = formData.get('workflowName') || document.getElementById('workflowName').value;
+        const description = formData.get('workflowDescription') || document.getElementById('workflowDescription').value;
+        const schedule = formData.get('workflowSchedule') || document.getElementById('workflowSchedule').value || '';
+        const trigger = schedule ? { type: 'schedule' } : { type: 'manual' };
         const workflowData = {
-            name: formData.get('workflowName') || document.getElementById('workflowName').value,
-            description: formData.get('workflowDescription') || document.getElementById('workflowDescription').value,
-            trigger: { type: 'schedule' },
-            schedule: formData.get('workflowSchedule') || document.getElementById('workflowSchedule').value,
+            name,
+            description,
+            trigger,
+            schedule: schedule || undefined,
             accounts: [{
                 accountName: formData.get('workflowAccount') || document.getElementById('workflowAccount').value,
                 customization: {}

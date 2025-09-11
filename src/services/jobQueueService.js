@@ -401,6 +401,69 @@ export class JobQueueService {
     }
   }
 
+  async updateScheduledWorkflow(workflowName, newCronExpression) {
+    if (!this.enabled) {
+      throw new Error('Job queue not enabled');
+    }
+
+    try {
+      // Fetch existing schedule metadata
+      const existing = await this.redisService.getSchedule(workflowName);
+      if (!existing || !existing.workflowConfig) {
+        throw new Error('Scheduled workflow not found');
+      }
+
+      const { workflowConfig, context } = existing;
+
+      // Remove the current repeatable job (by old pattern)
+      const queue = this.queues.get('scheduled-workflows');
+      try {
+        await queue.removeRepeatable(existing.jobName, { pattern: existing.cronExpression });
+      } catch (err) {
+        // Log and continue — may not exist with the old pattern
+        this.logger.warn('⚠️ Could not remove old repeatable job during update', {
+          workflowName,
+          error: err.message
+        });
+      }
+
+      // Add the new repeatable job with updated cron
+      const jobName = `scheduled-${workflowConfig.name.replace(/\s+/g, '-').toLowerCase()}`;
+      const job = await queue.add(jobName, {
+        type: 'scheduled-workflow',
+        data: { workflowConfig, scheduleContext: context }
+      }, {
+        repeat: { pattern: newCronExpression },
+        removeOnComplete: 10,
+        removeOnFail: 5
+      });
+
+      // Persist new schedule metadata
+      await this.redisService.setSchedule(workflowConfig.name, {
+        cronExpression: newCronExpression,
+        workflowConfig,
+        context,
+        createdAt: new Date().toISOString(),
+        jobName
+      });
+
+      this.logger.info('📝 Scheduled workflow updated', {
+        workflowName,
+        oldCron: existing.cronExpression,
+        newCron: newCronExpression,
+        jobId: job.id
+      });
+
+      return { success: true, jobId: job.id };
+    } catch (error) {
+      this.logger.error('❌ Failed to update scheduled workflow', {
+        workflowName,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
   async getQueueStats() {
     if (!this.enabled) {
       return { enabled: false };

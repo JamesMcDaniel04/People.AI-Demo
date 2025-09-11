@@ -124,6 +124,7 @@ export class WorkflowAPI {
     // Job queue management routes
     this.app.get('/queue/stats', this.getQueueStats.bind(this));
     this.app.get('/queue/schedules', this.getAllSchedules.bind(this));
+    this.app.put('/queue/schedules/:workflowName', this.updateSchedule.bind(this));
     this.app.delete('/queue/schedules/:workflowName', this.removeSchedule.bind(this));
 
     // Demo API routes
@@ -768,6 +769,39 @@ export class WorkflowAPI {
         error: error.message 
       });
       res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  async updateSchedule(req, res) {
+    try {
+      const { workflowName } = req.params;
+      const { cronExpression } = req.body || {};
+
+      if (!cronExpression || typeof cronExpression !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: 'cronExpression is required'
+        });
+      }
+
+      const result = await this.orchestrator.jobQueueService.updateScheduledWorkflow(workflowName, cronExpression);
+
+      res.json({
+        success: true,
+        workflowName,
+        cronExpression,
+        job: result
+      });
+    } catch (error) {
+      this.logger.error('Failed to update schedule', {
+        workflowName: req.params.workflowName,
+        error: error.message
+      });
+      const status = /not found/i.test(error.message) ? 404 : 500;
+      res.status(status).json({
         success: false,
         error: error.message
       });

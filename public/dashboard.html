@@ -279,10 +279,7 @@
                                     <label>Account</label>
                                     <input type="text" id="demoWorkflowAccount" value="stripe">
                                 </div>
-                                <div class="form-group">
-                                    <label>Schedule (Cron)</label>
-                                    <input type="text" id="demoWorkflowSchedule" placeholder="0 9 * * 1">
-                                </div>
+                                <input type="hidden" id="demoWorkflowSchedule">
                                 <div class="form-group">
                                     <label>Schedule Type:</label>
                                     <select id="demoScheduleType">
@@ -294,8 +291,7 @@
                                 </div>
                                 <div class="form-group" id="demoScheduleBuilder" style="display:none;">
                                     <div id="demoBuilderHourly" style="display:none;">
-                                        <label>Minute:</label>
-                                        <select id="demoScheduleMinute"></select>
+                                        <div>Runs every hour at :00</div>
                                     </div>
                                     <div id="demoBuilderDaily" style="display:none;">
                                         <label>Time:</label>
@@ -362,8 +358,7 @@
                             </div>
                             <div class="form-group" id="scheduleBuilder" style="display:none;">
                                 <div id="builderHourly" style="display:none;">
-                                    <label>Minute:</label>
-                                    <select id="scheduleMinute"></select>
+                                    <div>Runs every hour at :00</div>
                                 </div>
                                 <div id="builderDaily" style="display:none;">
                                     <label>Time:</label>
@@ -384,11 +379,7 @@
                                     <select id="scheduleHourWeekly"></select> : <select id="scheduleMinuteWeekly"></select>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label>Schedule (Cron):</label>
-                                <input type="text" id="workflowSchedule" placeholder="0 9 * * *" required>
-                                <small>Use cron format: min hour day month weekday</small>
-                            </div>
+                            <input type="hidden" id="workflowSchedule">
                             <div class="form-group">
                                 <label>Account Name:</label>
                                 <input type="text" id="workflowAccount" required>
