@@ -54,6 +54,30 @@ class Dashboard {
             });
         }
 
+        // Schedule builder (Create Workflow Modal)
+        this.initScheduleBuilder({
+            typeId: 'scheduleType',
+            cronId: 'workflowSchedule',
+            containerId: 'scheduleBuilder',
+            fields: {
+                hourly: { minuteId: 'scheduleMinute' },
+                daily: { hourId: 'scheduleHour', minuteId: 'scheduleMinuteDaily' },
+                weekly: { dowId: 'scheduleDOW', hourId: 'scheduleHourWeekly', minuteId: 'scheduleMinuteWeekly' }
+            }
+        });
+
+        // Schedule builder (Demo Workflow Creator)
+        this.initScheduleBuilder({
+            typeId: 'demoScheduleType',
+            cronId: 'demoWorkflowSchedule',
+            containerId: 'demoScheduleBuilder',
+            fields: {
+                hourly: { minuteId: 'demoScheduleMinute' },
+                daily: { hourId: 'demoScheduleHour', minuteId: 'demoScheduleMinuteDaily' },
+                weekly: { dowId: 'demoScheduleDOW', hourId: 'demoScheduleHourWeekly', minuteId: 'demoScheduleMinuteWeekly' }
+            }
+        });
+
         // Modal backdrop click to close
         document.getElementById('createWorkflowModal').addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
@@ -68,6 +92,94 @@ class Dashboard {
         if (pplOpen) pplOpen.addEventListener('click', () => this.showPeopleAIModal());
         if (pplClose) pplClose.addEventListener('click', () => this.hidePeopleAIModal());
         if (pplSave) pplSave.addEventListener('click', () => this.savePeopleAIConfig());
+    }
+
+    // Initialize a schedule builder that outputs cron
+    initScheduleBuilder(cfg) {
+        const typeEl = document.getElementById(cfg.typeId);
+        const cronEl = document.getElementById(cfg.cronId);
+        const container = document.getElementById(cfg.containerId);
+        if (!typeEl || !cronEl || !container) return;
+
+        // Helper to populate time selects
+        const fill = (id, max) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.options.length > 0) return; // already filled
+            for (let i = 0; i <= max; i++) {
+                const opt = document.createElement('option');
+                opt.value = String(i);
+                opt.text = i.toString().padStart(2, '0');
+                el.appendChild(opt);
+            }
+        };
+
+        // Populate hours/minutes selects
+        const f = cfg.fields;
+        if (f.hourly?.minuteId) fill(f.hourly.minuteId, 59);
+        if (f.daily?.hourId) fill(f.daily.hourId, 23);
+        if (f.daily?.minuteId) fill(f.daily.minuteId, 59);
+        if (f.weekly?.hourId) fill(f.weekly.hourId, 23);
+        if (f.weekly?.minuteId) fill(f.weekly.minuteId, 59);
+
+        const showOnly = (mode) => {
+            container.style.display = mode ? 'block' : 'none';
+            const hourly = document.getElementById(container.id.replace('Builder', 'Builder').replace(cfg.containerId, '') + '');
+            // Toggle specific sub-sections
+            const map = {
+                hourly: document.getElementById(container.id.replace(cfg.containerId, 'builderHourly')) || document.getElementById('builderHourly') || document.getElementById('demoBuilderHourly'),
+                daily: document.getElementById(container.id.replace(cfg.containerId, 'builderDaily')) || document.getElementById('builderDaily') || document.getElementById('demoBuilderDaily'),
+                weekly: document.getElementById(container.id.replace(cfg.containerId, 'builderWeekly')) || document.getElementById('builderWeekly') || document.getElementById('demoBuilderWeekly')
+            };
+            // Determine section ids explicitly to avoid confusion
+            const hourlyEl = document.getElementById(cfg.containerId.includes('demo') ? 'demoBuilderHourly' : 'builderHourly');
+            const dailyEl = document.getElementById(cfg.containerId.includes('demo') ? 'demoBuilderDaily' : 'builderDaily');
+            const weeklyEl = document.getElementById(cfg.containerId.includes('demo') ? 'demoBuilderWeekly' : 'builderWeekly');
+            if (hourlyEl) hourlyEl.style.display = mode === 'hourly' ? 'block' : 'none';
+            if (dailyEl) dailyEl.style.display = mode === 'daily' ? 'block' : 'none';
+            if (weeklyEl) weeklyEl.style.display = mode === 'weekly' ? 'block' : 'none';
+        };
+
+        const rebuildCron = () => {
+            const mode = typeEl.value;
+            if (!mode) return; // custom
+            let cron = '* * * * *';
+            if (mode === 'hourly') {
+                const m = document.getElementById(f.hourly.minuteId).value || '0';
+                cron = `${m} * * * *`;
+            } else if (mode === 'daily') {
+                const h = document.getElementById(f.daily.hourId).value || '9';
+                const m = document.getElementById(f.daily.minuteId).value || '0';
+                cron = `${m} ${h} * * *`;
+            } else if (mode === 'weekly') {
+                const d = document.getElementById(f.weekly.dowId).value || '1';
+                const h = document.getElementById(f.weekly.hourId).value || '9';
+                const m = document.getElementById(f.weekly.minuteId).value || '0';
+                cron = `${m} ${h} * * ${d}`;
+            }
+            cronEl.value = cron;
+        };
+
+        typeEl.addEventListener('change', () => {
+            const mode = typeEl.value;
+            if (!mode) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'block';
+            showOnly(mode);
+            rebuildCron();
+        });
+
+        // Hook change events on all builder inputs
+        ['hourly', 'daily', 'weekly'].forEach(mode => {
+            const cfgMode = f[mode];
+            if (!cfgMode) return;
+            Object.values(cfgMode).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', rebuildCron);
+            });
+        });
     }
 
     switchTab(tabName) {

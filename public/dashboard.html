@@ -283,6 +283,39 @@
                                     <label>Schedule (Cron)</label>
                                     <input type="text" id="demoWorkflowSchedule" placeholder="0 9 * * 1">
                                 </div>
+                                <div class="form-group">
+                                    <label>Schedule Type:</label>
+                                    <select id="demoScheduleType">
+                                        <option value="">Custom (Cron)</option>
+                                        <option value="hourly">Hourly</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="demoScheduleBuilder" style="display:none;">
+                                    <div id="demoBuilderHourly" style="display:none;">
+                                        <label>Minute:</label>
+                                        <select id="demoScheduleMinute"></select>
+                                    </div>
+                                    <div id="demoBuilderDaily" style="display:none;">
+                                        <label>Time:</label>
+                                        <select id="demoScheduleHour"></select> : <select id="demoScheduleMinuteDaily"></select>
+                                    </div>
+                                    <div id="demoBuilderWeekly" style="display:none;">
+                                        <label>Day:</label>
+                                        <select id="demoScheduleDOW">
+                                            <option value="1">Mon</option>
+                                            <option value="2">Tue</option>
+                                            <option value="3">Wed</option>
+                                            <option value="4">Thu</option>
+                                            <option value="5">Fri</option>
+                                            <option value="6">Sat</option>
+                                            <option value="0">Sun</option>
+                                        </select>
+                                        <label style="margin-left:8px;">Time:</label>
+                                        <select id="demoScheduleHourWeekly"></select> : <select id="demoScheduleMinuteWeekly"></select>
+                                    </div>
+                                </div>
                                 <div class="form-actions">
                                     <button class="secondary-button" id="createDemoWorkflowBtn"><i class="fas fa-plus"></i> Create</button>
                                     <button class="primary-button" id="createAndRunDemoWorkflowBtn"><i class="fas fa-play"></i> Create & Run</button>
@@ -317,6 +350,39 @@
                                     <option value="0 8 * * 1">Weekly Mon 08:00</option>
                                     <option value="0 9 1 */3 *">Quarterly 1st 09:00</option>
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Type:</label>
+                                <select id="scheduleType">
+                                    <option value="">Custom (Cron)</option>
+                                    <option value="hourly">Hourly</option>
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="scheduleBuilder" style="display:none;">
+                                <div id="builderHourly" style="display:none;">
+                                    <label>Minute:</label>
+                                    <select id="scheduleMinute"></select>
+                                </div>
+                                <div id="builderDaily" style="display:none;">
+                                    <label>Time:</label>
+                                    <select id="scheduleHour"></select> : <select id="scheduleMinuteDaily"></select>
+                                </div>
+                                <div id="builderWeekly" style="display:none;">
+                                    <label>Day:</label>
+                                    <select id="scheduleDOW">
+                                        <option value="1">Mon</option>
+                                        <option value="2">Tue</option>
+                                        <option value="3">Wed</option>
+                                        <option value="4">Thu</option>
+                                        <option value="5">Fri</option>
+                                        <option value="6">Sat</option>
+                                        <option value="0">Sun</option>
+                                    </select>
+                                    <label style="margin-left:8px;">Time:</label>
+                                    <select id="scheduleHourWeekly"></select> : <select id="scheduleMinuteWeekly"></select>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Schedule (Cron):</label>
