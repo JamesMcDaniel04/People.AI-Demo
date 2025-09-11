@@ -232,14 +232,7 @@ class Dashboard {
         const resultsDiv = document.getElementById('demoResults');
         // If API returned a hardcoded mock message, show it directly
         if (data && data.message && data.success) {
-            const content = `
-                <div class="result-item">
-                    <div class="result-header">✅ Mock Account Plan</div>
-                    <div class="result-content" style="white-space: pre-wrap;">${data.message}</div>
-                </div>
-            `;
-            if (options.append) resultsDiv.insertAdjacentHTML('beforeend', content);
-            else resultsDiv.innerHTML = content;
+            // Suppress the API's mock account plan; we already show a hardcoded message
             return;
         }
 
@@ -396,60 +389,86 @@ class Dashboard {
     // Load Workflows
     async loadWorkflows() {
         try {
-            const response = await fetch('/workflows');
-            const data = await response.json();
-            
+            // Prefer BullMQ scheduled workflows for an "active" view
+            const schedRes = await fetch('/queue/schedules');
+            const schedData = await schedRes.json();
+
             let content = '';
-            
-            if (data.workflows && data.workflows.length > 0) {
-                data.workflows.forEach(workflow => {
-                    const scheduleLine = workflow.trigger?.type === 'schedule' && workflow.schedule ? `
-                        <div><strong>Schedule:</strong> <code>${workflow.schedule}</code></div>` : '';
-                    const lastRunLine = workflow.lastRun ? `<div><strong>Last Run:</strong> ${new Date(workflow.lastRun).toLocaleString()}</div>` : '';
+            if (schedRes.ok && schedData.success && Array.isArray(schedData.data) && schedData.data.length > 0) {
+                content += '<div class="workflow-item"><div class="workflow-header"><div class="workflow-name">Scheduled Workflows (BullMQ)</div></div><div class="workflow-details">Showing active schedules from the queue</div></div>';
+                schedData.data.forEach(s => {
+                    const name = s.workflowConfig?.name || s.workflowId || s.jobName || 'Scheduled Workflow';
+                    const cron = s.cronExpression || 'N/A';
+                    const created = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
                     content += `
-                        <div class="workflow-item" data-id="${workflow.id}" data-enabled="${workflow.enabled}">
+                        <div class="workflow-item">
                             <div class="workflow-header">
-                                <div class="workflow-name">${workflow.name}</div>
-                                <div class="workflow-status ${workflow.enabled ? 'active' : 'inactive'}">
-                                    ${workflow.enabled ? 'Active' : 'Inactive'}
-                                </div>
+                                <div class="workflow-name"><a href="/admin/queues/queue/scheduled-workflows">${name}</a></div>
+                                <div class="workflow-status active">Active</div>
                             </div>
                             <div class="workflow-details">
-                                <div><strong>Description:</strong> ${workflow.description || 'No description'}</div>
-                                <div><strong>Engine:</strong> ${workflow.engine}</div>
-                                ${scheduleLine}
-                                ${lastRunLine}
+                                <div><strong>Schedule:</strong> <code>${cron}</code></div>
+                                ${created ? `<div><strong>Scheduled:</strong> ${created}</div>` : ''}
                                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                                    <button class="secondary-button btn-run" data-id="${workflow.id}"><i class="fas fa-play"></i> Run Now</button>
-                                    <button class="secondary-button btn-edit-schedule" data-id="${workflow.id}"><i class="fas fa-clock"></i> Edit Schedule</button>
-                                    <button class="secondary-button btn-toggle" data-id="${workflow.id}" data-next="${!workflow.enabled}">
-                                        <i class="fas fa-power-off"></i> ${workflow.enabled ? 'Disable' : 'Enable'}
-                                    </button>
-                                </div>
-                                <div class="edit-schedule" id="edit-${workflow.id}" style="display:none; margin-top:8px;">
-                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${workflow.schedule || ''}" style="width:220px;">
-                                    <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
-                                    <small>Use cron format.</small>
+                                    <a class="primary-button" href="/admin/queues/queue/scheduled-workflows"><i class="fas fa-list"></i> View Details</a>
                                 </div>
                             </div>
                         </div>`;
                 });
             } else {
-                content = `
-                    <div class="workflow-item">
-                        <div class="workflow-header">
-                            <div class="workflow-name">No workflows found</div>
+                // Fallback to orchestrator workflows list
+                const response = await fetch('/workflows');
+                const data = await response.json();
+                if (data.workflows && data.workflows.length > 0) {
+                    data.workflows.forEach(workflow => {
+                        const scheduleLine = workflow.trigger?.type === 'schedule' && workflow.schedule ? `
+                            <div><strong>Schedule:</strong> <code>${workflow.schedule}</code></div>` : '';
+                        const lastRunLine = workflow.lastRun ? `<div><strong>Last Run:</strong> ${new Date(workflow.lastRun).toLocaleString()}</div>` : '';
+                        content += `
+                            <div class="workflow-item" data-id="${workflow.id}" data-enabled="${workflow.enabled}">
+                                <div class="workflow-header">
+                                    <div class="workflow-name">${workflow.name}</div>
+                                    <div class="workflow-status ${workflow.enabled ? 'active' : 'inactive'}">
+                                        ${workflow.enabled ? 'Active' : 'Inactive'}
+                                    </div>
+                                </div>
+                                <div class="workflow-details">
+                                    <div><strong>Description:</strong> ${workflow.description || 'No description'}</div>
+                                    <div><strong>Engine:</strong> ${workflow.engine}</div>
+                                    ${scheduleLine}
+                                    ${lastRunLine}
+                                    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                                        <button class="secondary-button btn-run" data-id="${workflow.id}"><i class="fas fa-play"></i> Run Now</button>
+                                        <button class="secondary-button btn-edit-schedule" data-id="${workflow.id}"><i class="fas fa-clock"></i> Edit Schedule</button>
+                                        <button class="secondary-button btn-toggle" data-id="${workflow.id}" data-next="${!workflow.enabled}">
+                                            <i class="fas fa-power-off"></i> ${workflow.enabled ? 'Disable' : 'Enable'}
+                                        </button>
+                                    </div>
+                                    <div class="edit-schedule" id="edit-${workflow.id}" style="display:none; margin-top:8px;">
+                                        <input type="text" class="cron-input" placeholder="* * * * *" value="${workflow.schedule || ''}" style="width:220px;">
+                                        <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
+                                        <small>Use cron format.</small>
+                                    </div>
+                                </div>
+                            </div>`;
+                });
+                } else {
+                    content = `
+                        <div class="workflow-item">
+                            <div class="workflow-header">
+                                <div class="workflow-name">No workflows or schedules found</div>
+                            </div>
+                            <div class="workflow-details">
+                                Create your first workflow using the "Create Workflow" button above.
+                            </div>
                         </div>
-                        <div class="workflow-details">
-                            Create your first workflow using the "Create Workflow" button above.
-                        </div>
-                    </div>
-                `;
+                    `;
+                }
             }
-            
+
             document.getElementById('workflowsList').innerHTML = content;
 
-            // Attach action handlers (event delegation)
+            // Attach action handlers for orchestrator workflows
             document.getElementById('workflowsList').addEventListener('click', async (e) => {
                 const runBtn = e.target.closest('.btn-run');
                 const editBtn = e.target.closest('.btn-edit-schedule');
