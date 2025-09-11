@@ -5,71 +5,37 @@ export function createDemoAPI(workflowOrchestrator) {
   const router = express.Router();
   const logger = new Logger();
 
-  // Trigger demo workflow for account
+  // Trigger demo workflow for account (mock: returns hardcoded message)
   router.post('/demo/:accountName', async (req, res) => {
     const { accountName } = req.params;
-    const { recipients = ['demo@example.com'], template = 'default' } = req.body;
+    logger.info('🎯 Demo workflow (mock) triggered', { accountName });
 
-    logger.info('🎯 Demo workflow triggered', { accountName });
+    const mockMessage = `:robot_face: Account Plan: TechFlow Dynamics :bar_chart: Health: 90/100 :large_green_circle:
+**Summary:**
+- Emails, calls, and meeting notes show strong engagement between TechFlow Dynamics and Stripe. Implementation is on track, with Q1 performance exceeding targets (23% conversion improvement, $890K cost savings, international launches in UK/Germany).
+- Key personas: Priya Patel (VP Eng), David Kim (CFO), James Mitchell (CEO), Michael Torres (Product), Lisa Johnson (Finance), Jennifer Wong (CSM, Stripe), Sarah Chen (AE, Stripe), Marcus Rodriguez (SE, Stripe).
+- Recent calls: Executive briefing, QBR, technical deep dives, implementation reviews—all show alignment and momentum.
+**Top 3 Strategic Recommendations:**
+1. Launch Stripe Billing for subscription automation by 2025-09-18
+2. Expand to Australia/Japan by 2025-10-15
+3. Implement Stripe Radar for fraud reduction by 2025-09-25
+**Expansion Opportunities:**
+- Stripe Capital for revenue-based financing
+- Deeper product adoption (Radar, Billing)
+- APAC market entry
+**Risks:**
+- Integration complexity, resource allocation, competitive pressure
+**Next Actions:**
+- Schedule Q2 planning call by 2025-09-13
+- Assign technical lead for APAC launch by 2025-09-20
+- Review fraud metrics post-Radar by 2025-09-30
+:busts_in_silhouette: Owner: @jennifer.wong@stripe.com`;
 
-    try {
-      // Create demo workflow configuration
-      const demoWorkflow = {
-        name: `Demo: ${accountName} Account Plan`,
-        description: 'Automated demo account plan generation',
-        trigger: { type: 'manual' },
-        accounts: [
-          {
-            accountName,
-            customization: {
-              focusAreas: ['growth', 'retention', 'expansion']
-            }
-          }
-        ],
-        distributors: [
-          {
-            type: 'email',
-            config: {
-              recipients: recipients.map(email => ({ email })),
-              subject: `Demo Account Plan: ${accountName}`,
-              template
-            }
-          }
-        ],
-        enabled: true,
-        engine: 'internal'
-      };
+    console.log('\n===== MOCK ACCOUNT PLAN (HARD-CODED) =====\n');
+    console.log(mockMessage);
+    console.log('\n==========================================\n');
 
-      // Create and execute workflow
-      const workflow = await workflowOrchestrator.createWorkflow(demoWorkflow);
-      const execution = await workflowOrchestrator.executeWorkflow(workflow.id, {
-        trigger: 'demo-api',
-        requestedBy: req.ip,
-        timestamp: new Date().toISOString()
-      });
-
-      res.json({
-        success: true,
-        message: `Demo account plan generated for ${accountName}`,
-        workflowId: workflow.id,
-        executionId: execution.executionId,
-        results: execution.results,
-        timestamp: execution.completedAt
-      });
-
-    } catch (error) {
-      logger.error('❌ Demo workflow failed', {
-        accountName,
-        error: error.message
-      });
-
-      res.status(500).json({
-        success: false,
-        error: 'Demo workflow execution failed',
-        details: error.message,
-        accountName
-      });
-    }
+    return res.json({ success: true, message: mockMessage, accountName });
   });
 
   // Get demo status

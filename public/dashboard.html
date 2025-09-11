@@ -31,8 +31,6 @@
             <!-- Navigation Tabs -->
             <nav class="dashboard-tabs">
                 <button class="tab-button active" data-tab="demo">Demo</button>
-                <button class="tab-button" data-tab="system">System</button>
-                <button class="tab-button" data-tab="queues">Queues</button>
                 <button class="tab-button" data-tab="workflows">Workflows</button>
                 <button class="tab-button" data-tab="integration">Integration</button>
                 <button class="tab-button" data-tab="settings">Settings</button>
@@ -71,55 +69,7 @@
                 </div>
             </div>
 
-            <!-- System Tab -->
-            <div class="tab-content" id="system-tab">
-                <div class="system-grid">
-                    <div class="system-card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-heartbeat"></i> System Health</h3>
-                            <button class="refresh-btn" data-endpoint="/health">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
-                        <div class="card-content" id="healthContent">
-                            <div class="loading">Loading...</div>
-                        </div>
-                    </div>
-
-                    <div class="system-card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-plug"></i> Integration Status</h3>
-                            <button class="refresh-btn" data-endpoint="/integration/status">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
-                        <div class="card-content" id="integrationContent">
-                            <div class="loading">Loading...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Queues Tab -->
-            <div class="tab-content" id="queues-tab">
-                <div class="section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-tasks"></i> Job Queue Management</h2>
-                        <div class="header-actions">
-                            <button class="secondary-button" onclick="window.open('/admin/queues', '_blank')">
-                                <i class="fas fa-external-link-alt"></i> Bull Board Dashboard
-                            </button>
-                            <button class="refresh-btn" data-endpoint="/queue/stats">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="queue-stats" id="queueStats">
-                        <div class="loading">Loading queue statistics...</div>
-                    </div>
-                </div>
-            </div>
+            
 
             <!-- Settings Tab -->
             <div class="tab-content" id="settings-tab">
@@ -239,7 +189,111 @@
                     </div>
                 </div>
 
+                <!-- Job Queue Management (moved from Queues tab) -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-tasks"></i> Job Queue Management</h2>
+                        <div class="header-actions">
+                            <button class="secondary-button" onclick="window.open('/admin/queues', '_blank')">
+                                <i class="fas fa-external-link-alt"></i> Bull Board Dashboard
+                            </button>
+                            <button class="refresh-btn" data-endpoint="/queue/stats">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="queue-stats" id="queueStats">
+                        <div class="loading">Loading queue statistics...</div>
+                    </div>
+                </div>
+
+                <!-- Demo Workflow Outline & Creator -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-lightbulb"></i> Demo Workflow: Account Plan Orchestration</h2>
+                        <p>Collect, analyze, and distribute account plans via Email and Slack (#dealflow).</p>
+                    </div>
+                    <div class="system-grid">
+                        <div class="system-card">
+                            <div class="card-header"><h3>Goal</h3></div>
+                            <div class="card-content">
+                                Generate comprehensive account plans by collecting data from multiple sources, analyzing account health, and distributing actionable insights to stakeholders via email, Slack, and Airtable.
+                            </div>
+                        </div>
+                        <div class="system-card">
+                            <div class="card-header"><h3>Integrations</h3></div>
+                            <div class="card-content">
+                                <ul>
+                                    <li>Pull account data, contacts, deals, and health scores</li>
+                                    <li>Retrieve recent emails and send account plan summaries</li>
+                                    <li>Send notifications and updates to relevant channels (CSV-provided content)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="system-card">
+                            <div class="card-header"><h3>Instructions</h3></div>
+                            <div class="card-content">
+                                <strong>Data Collection Phase</strong>
+                                <ul>
+                                    <li>Pull Airtable People.ai demo table (contacts, deals, health)</li>
+                                    <li>Mock-scan Gmail (last 30 days) related to the account</li>
+                                    <li>Gather call transcripts and meeting notes</li>
+                                    <li>Validate minimum data: 3+ emails, 1+ call</li>
+                                </ul>
+                                <strong>Account Plan Generation</strong>
+                                <ul>
+                                    <li>Calculate health score and status</li>
+                                    <li>Top 3 strategic recommendations with deadlines</li>
+                                    <li>Map key stakeholders and influence</li>
+                                    <li>Identify expansion opportunities and risks</li>
+                                    <li>Define clear next actions</li>
+                                </ul>
+                                <strong>Distribution Phase</strong>
+                                <ul>
+                                    <li>Email owner with subject: "Account Plan: [Account Name] - [Date]"</li>
+                                    <li>Update Airtable with health score, tasks, and next review (+7d)</li>
+                                    <li>Slack post to #dealflow; if health < 70, also #sales-alerts; else #account-planning</li>
+                                </ul>
+                                <strong>Error Handling</strong>
+                                <ul>
+                                    <li>Insufficient data: notify owner via Slack</li>
+                                    <li>System failures: retry once, then alert admin</li>
+                                    <li>Follow up in 48h if no response</li>
+                                </ul>
+                                <strong>Notes</strong>
+                                <ul>
+                                    <li>Health emojis: 🟢 (80+), 🟡 (60–79), 🔴 (<60)</li>
+                                    <li>Always include deadlines and prioritize expansion</li>
+                                    <li>Mock Gmail; Airtable scoped to People.ai demo table</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="system-card">
+                            <div class="card-header"><h3>Create Demo Workflow</h3></div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label>Workflow Name</label>
+                                    <input type="text" id="demoWorkflowName" value="Demo: Account Plan Orchestration">
+                                </div>
+                                <div class="form-group">
+                                    <label>Account</label>
+                                    <input type="text" id="demoWorkflowAccount" value="stripe">
+                                </div>
+                                <div class="form-group">
+                                    <label>Schedule (Cron)</label>
+                                    <input type="text" id="demoWorkflowSchedule" placeholder="0 9 * * 1">
+                                </div>
+                                <div class="form-actions">
+                                    <button class="secondary-button" id="createDemoWorkflowBtn"><i class="fas fa-plus"></i> Create</button>
+                                    <button class="primary-button" id="createAndRunDemoWorkflowBtn"><i class="fas fa-play"></i> Create & Run</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Create Workflow Modal -->
+                
                 <div class="modal" id="createWorkflowModal">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -256,8 +310,18 @@
                                 <textarea id="workflowDescription"></textarea>
                             </div>
                             <div class="form-group">
+                                <label>Schedule Preset:</label>
+                                <select id="schedulePreset">
+                                    <option value="">Custom</option>
+                                    <option value="0 9 * * *">Daily at 09:00</option>
+                                    <option value="0 8 * * 1">Weekly Mon 08:00</option>
+                                    <option value="0 9 1 */3 *">Quarterly 1st 09:00</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label>Schedule (Cron):</label>
                                 <input type="text" id="workflowSchedule" placeholder="0 9 * * *" required>
+                                <small>Use cron format: min hour day month weekday</small>
                             </div>
                             <div class="form-group">
                                 <label>Account Name:</label>

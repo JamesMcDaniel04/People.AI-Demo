@@ -8,7 +8,9 @@ class Dashboard {
     async init() {
         this.setupEventListeners();
         await this.checkSystemHealth();
-        this.loadInitialData();
+        // Load initial data for visible tabs
+        await this.loadWorkflows();
+        await this.loadQueueStats();
     }
 
     setupEventListeners() {
@@ -39,6 +41,18 @@ class Dashboard {
         document.querySelector('.close-modal').addEventListener('click', () => this.hideCreateWorkflowModal());
         document.querySelector('.cancel-btn').addEventListener('click', () => this.hideCreateWorkflowModal());
         document.getElementById('createWorkflowForm').addEventListener('submit', (e) => this.createWorkflow(e));
+
+        // Schedule preset helper
+        const preset = document.getElementById('schedulePreset');
+        if (preset) {
+            preset.addEventListener('change', (e) => {
+                const value = e.target.value;
+                if (value) {
+                    const cron = document.getElementById('workflowSchedule');
+                    if (cron) cron.value = value;
+                }
+            });
+        }
 
         // Modal backdrop click to close
         document.getElementById('createWorkflowModal').addEventListener('click', (e) => {
@@ -76,14 +90,9 @@ class Dashboard {
 
     async loadTabData(tabName) {
         switch (tabName) {
-            case 'system':
-                await this.loadSystemData();
-                break;
-            case 'queues':
-                await this.loadQueueStats();
-                break;
             case 'workflows':
                 await this.loadWorkflows();
+                await this.loadQueueStats();
                 break;
             case 'integration':
                 await this.loadIntegrationStatus();
@@ -130,9 +139,7 @@ class Dashboard {
         }
     }
 
-    async loadInitialData() {
-        await this.loadSystemData();
-    }
+    async loadInitialData() { /* removed system tab init */ }
 
     // System Health Check
     async checkSystemHealth() {
@@ -159,75 +166,32 @@ class Dashboard {
     }
 
     // Load System Data
-    async loadSystemData() {
-        await Promise.all([
-            this.loadHealthData(),
-            this.loadIntegrationData()
-        ]);
-    }
+    async loadSystemData() { /* system tab removed */ }
 
-    async loadHealthData() {
-        try {
-            const response = await fetch('/health');
-            const data = await response.json();
-            
-            document.getElementById('healthContent').innerHTML = `
-                <div class="result-item">
-                    <div class="result-header">System Status</div>
-                    <div class="result-content">Status: ${data.status}</div>
-                </div>
-                <div class="result-item">
-                    <div class="result-header">Version</div>
-                    <div class="result-content">v${data.version}</div>
-                </div>
-                <div class="result-item">
-                    <div class="result-header">Last Check</div>
-                    <div class="result-content">${new Date(data.timestamp).toLocaleString()}</div>
-                </div>
-            `;
-        } catch (error) {
-            document.getElementById('healthContent').innerHTML = `
-                <div class="result-item">
-                    <div class="result-header">Error</div>
-                    <div class="result-content">Failed to load health data: ${error.message}</div>
-                </div>
-            `;
-        }
-    }
+    async loadHealthData() { /* system tab removed */ }
 
     async loadIntegrationData() {
         try {
             const response = await fetch('/integration/status');
             const data = await response.json();
             
-            let content = `
-                <div class="result-item">
-                    <div class="result-header">Data Source</div>
-                    <div class="result-content">${data.integration.source}</div>
-                </div>
-            `;
-            
-            if (data.integration.sample) {
+            // If integration tab is visible, render grid there; otherwise ignore silently
+            const el = document.getElementById('integrationDetails');
+            if (el) {
+                let content = '<div class="integration-grid">';
                 content += `
-                    <div class="result-item">
-                        <div class="result-header">Sample Data</div>
-                        <div class="result-content">
-                            ${data.integration.sample.emails} emails, 
-                            ${data.integration.sample.calls} calls, 
-                            ${data.integration.sample.stakeholders} stakeholders
+                    <div class="integration-card">
+                        <div class="integration-icon">
+                            <i class="fas fa-database"></i>
                         </div>
-                    </div>
-                `;
+                        <div class="integration-name">${data.integration.source.toUpperCase()}</div>
+                        <div class="integration-status connected">${data.integration.source === 'sample' ? 'Connected' : 'Configured'}</div>
+                    </div>`;
+                content += '</div>';
+                el.innerHTML = content;
             }
-            
-            document.getElementById('integrationContent').innerHTML = content;
         } catch (error) {
-            document.getElementById('integrationContent').innerHTML = `
-                <div class="result-item">
-                    <div class="result-header">Error</div>
-                    <div class="result-content">Failed to load integration data: ${error.message}</div>
-                </div>
-            `;
+            // no-op if element is absent
         }
     }
 
@@ -235,9 +199,9 @@ class Dashboard {
     async generateAccountPlan() {
         const accountName = document.getElementById('accountName').value;
         const recipients = document.getElementById('emailRecipients').value.split(',').map(email => email.trim());
-        
-        this.showLoading();
-        
+        // Show required hardcoded demo message immediately
+        this.displayHardcodedDemoMessage();
+
         try {
             const response = await fetch(`/api/demo/${accountName}`, {
                 method: 'POST',
@@ -252,17 +216,33 @@ class Dashboard {
             }
             
             const data = await response.json();
-            this.displayAccountPlanResults(data);
+            this.displayAccountPlanResults(data, { append: true });
         } catch (error) {
-            this.displayError('Account Plan Generation', error.message);
-        } finally {
-            this.hideLoading();
+            const resultsDiv = document.getElementById('demoResults');
+            resultsDiv.insertAdjacentHTML('beforeend', `
+                <div class="result-item">
+                    <div class="result-header">ℹ️ API Note</div>
+                    <div class="result-content">${error.message}</div>
+                </div>
+            `);
         }
     }
 
-    displayAccountPlanResults(data) {
+    displayAccountPlanResults(data, options = { append: false }) {
         const resultsDiv = document.getElementById('demoResults');
-        
+        // If API returned a hardcoded mock message, show it directly
+        if (data && data.message && data.success) {
+            const content = `
+                <div class="result-item">
+                    <div class="result-header">✅ Mock Account Plan</div>
+                    <div class="result-content" style="white-space: pre-wrap;">${data.message}</div>
+                </div>
+            `;
+            if (options.append) resultsDiv.insertAdjacentHTML('beforeend', content);
+            else resultsDiv.innerHTML = content;
+            return;
+        }
+
         if (data.status === 'success') {
             let content = `
                 <div class="result-item">
@@ -307,10 +287,55 @@ class Dashboard {
                 });
             }
             
-            resultsDiv.innerHTML = content;
+            if (options.append) {
+                resultsDiv.insertAdjacentHTML('beforeend', content);
+            } else {
+                resultsDiv.innerHTML = content;
+            }
         } else {
             this.displayError('Account Plan Generation', data.error || 'Unknown error');
         }
+    }
+
+    displayHardcodedDemoMessage() {
+        const resultsDiv = document.getElementById('demoResults');
+        const html = `
+            <div class="result-item">
+                <div class="result-header">🤖 Account Plan: TechFlow Dynamics 📊 Health: 90/100 🟢</div>
+                <div class="result-content">
+                    <strong>Summary:</strong>
+                    <ul>
+                        <li>Emails, calls, and meeting notes show strong engagement between TechFlow Dynamics and Stripe. Implementation is on track, with Q1 performance exceeding targets (23% conversion improvement, $890K cost savings, international launches in UK/Germany).</li>
+                        <li>Key personas: Priya Patel (VP Eng), David Kim (CFO), James Mitchell (CEO), Michael Torres (Product), Lisa Johnson (Finance), Jennifer Wong (CSM, Stripe), Sarah Chen (AE, Stripe), Marcus Rodriguez (SE, Stripe).</li>
+                        <li>Recent calls: Executive briefing, QBR, technical deep dives, implementation reviews — all show alignment and momentum.</li>
+                    </ul>
+                    <strong>Top 3 Strategic Recommendations:</strong>
+                    <ol>
+                        <li>Launch Stripe Billing for subscription automation by 2025-09-18</li>
+                        <li>Expand to Australia/Japan by 2025-10-15</li>
+                        <li>Implement Stripe Radar for fraud reduction by 2025-09-25</li>
+                    </ol>
+                    <strong>Expansion Opportunities:</strong>
+                    <ul>
+                        <li>Stripe Capital for revenue-based financing</li>
+                        <li>Deeper product adoption (Radar, Billing)</li>
+                        <li>APAC market entry</li>
+                    </ul>
+                    <strong>Risks:</strong>
+                    <ul>
+                        <li>Integration complexity, resource allocation, competitive pressure</li>
+                    </ul>
+                    <strong>Next Actions:</strong>
+                    <ul>
+                        <li>Schedule Q2 planning call by 2025-09-13</li>
+                        <li>Assign technical lead for APAC launch by 2025-09-20</li>
+                        <li>Review fraud metrics post-Radar by 2025-09-30</li>
+                    </ul>
+                    <div><strong>👥 Owner:</strong> @jennifer.wong@stripe.com</div>
+                </div>
+            </div>
+        `;
+        resultsDiv.innerHTML = html;
     }
 
     // Load Queue Stats
@@ -378,8 +403,11 @@ class Dashboard {
             
             if (data.workflows && data.workflows.length > 0) {
                 data.workflows.forEach(workflow => {
+                    const scheduleLine = workflow.trigger?.type === 'schedule' && workflow.schedule ? `
+                        <div><strong>Schedule:</strong> <code>${workflow.schedule}</code></div>` : '';
+                    const lastRunLine = workflow.lastRun ? `<div><strong>Last Run:</strong> ${new Date(workflow.lastRun).toLocaleString()}</div>` : '';
                     content += `
-                        <div class="workflow-item">
+                        <div class="workflow-item" data-id="${workflow.id}" data-enabled="${workflow.enabled}">
                             <div class="workflow-header">
                                 <div class="workflow-name">${workflow.name}</div>
                                 <div class="workflow-status ${workflow.enabled ? 'active' : 'inactive'}">
@@ -387,13 +415,24 @@ class Dashboard {
                                 </div>
                             </div>
                             <div class="workflow-details">
-                                <strong>Description:</strong> ${workflow.description || 'No description'}<br>
-                                <strong>Engine:</strong> ${workflow.engine}<br>
-                                <strong>Created:</strong> ${new Date(workflow.createdAt).toLocaleString()}<br>
-                                ${workflow.lastRun ? `<strong>Last Run:</strong> ${new Date(workflow.lastRun).toLocaleString()}` : ''}
+                                <div><strong>Description:</strong> ${workflow.description || 'No description'}</div>
+                                <div><strong>Engine:</strong> ${workflow.engine}</div>
+                                ${scheduleLine}
+                                ${lastRunLine}
+                                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                                    <button class="secondary-button btn-run" data-id="${workflow.id}"><i class="fas fa-play"></i> Run Now</button>
+                                    <button class="secondary-button btn-edit-schedule" data-id="${workflow.id}"><i class="fas fa-clock"></i> Edit Schedule</button>
+                                    <button class="secondary-button btn-toggle" data-id="${workflow.id}" data-next="${!workflow.enabled}">
+                                        <i class="fas fa-power-off"></i> ${workflow.enabled ? 'Disable' : 'Enable'}
+                                    </button>
+                                </div>
+                                <div class="edit-schedule" id="edit-${workflow.id}" style="display:none; margin-top:8px;">
+                                    <input type="text" class="cron-input" placeholder="* * * * *" value="${workflow.schedule || ''}" style="width:220px;">
+                                    <button class="primary-button btn-save-schedule" data-id="${workflow.id}"><i class="fas fa-save"></i> Save</button>
+                                    <small>Use cron format.</small>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 });
             } else {
                 content = `
@@ -409,6 +448,26 @@ class Dashboard {
             }
             
             document.getElementById('workflowsList').innerHTML = content;
+
+            // Attach action handlers (event delegation)
+            document.getElementById('workflowsList').addEventListener('click', async (e) => {
+                const runBtn = e.target.closest('.btn-run');
+                const editBtn = e.target.closest('.btn-edit-schedule');
+                const saveBtn = e.target.closest('.btn-save-schedule');
+                const toggleBtn = e.target.closest('.btn-toggle');
+                if (runBtn) {
+                    await this.runWorkflow(runBtn.dataset.id);
+                } else if (editBtn) {
+                    const panel = document.getElementById(`edit-${editBtn.dataset.id}`);
+                    if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                } else if (saveBtn) {
+                    const panel = document.getElementById(`edit-${saveBtn.dataset.id}`);
+                    const input = panel?.querySelector('.cron-input');
+                    if (input) await this.saveWorkflowSchedule(saveBtn.dataset.id, input.value);
+                } else if (toggleBtn) {
+                    await this.toggleWorkflow(toggleBtn.dataset.id, toggleBtn.dataset.next === 'true');
+                }
+            });
         } catch (error) {
             document.getElementById('workflowsList').innerHTML = `
                 <div class="workflow-item">
@@ -420,6 +479,53 @@ class Dashboard {
                     </div>
                 </div>
             `;
+        }
+    }
+
+    async runWorkflow(id) {
+        try {
+            this.showLoading();
+            const res = await fetch(`/workflows/${id}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: {} }) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Failed to run workflow');
+            alert('Workflow execution started.');
+        } catch (err) {
+            alert(`Failed to run workflow: ${err.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async saveWorkflowSchedule(id, cron) {
+        try {
+            this.showLoading();
+            // Update schedule
+            let res = await fetch(`/workflows/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule: cron, trigger: { type: 'schedule' } }) });
+            let data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Update failed');
+            // Force reschedule by disable->enable
+            await fetch(`/workflows/${id}/toggle`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
+            await fetch(`/workflows/${id}/toggle`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: true }) });
+            await this.loadWorkflows();
+            alert('Schedule updated.');
+        } catch (err) {
+            alert(`Failed to save schedule: ${err.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async toggleWorkflow(id, enabled) {
+        try {
+            this.showLoading();
+            const res = await fetch(`/workflows/${id}/toggle`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Toggle failed');
+            await this.loadWorkflows();
+        } catch (err) {
+            alert(`Failed to toggle workflow: ${err.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
@@ -528,6 +634,63 @@ class Dashboard {
             alert('Workflow created successfully!');
         } catch (error) {
             alert(`Error creating workflow: ${error.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // Demo Workflow Creator
+    async createDemoWorkflow(runAfterCreate = false) {
+        const name = document.getElementById('demoWorkflowName').value || 'Demo: Account Plan Orchestration';
+        const account = document.getElementById('demoWorkflowAccount').value || 'stripe';
+        const schedule = document.getElementById('demoWorkflowSchedule').value || '';
+
+        const payload = {
+            name,
+            description: 'Demo workflow that generates account plans and distributes via Email and Slack (#dealflow).',
+            trigger: schedule ? { type: 'schedule' } : { type: 'manual' },
+            schedule: schedule || undefined,
+            accounts: [{ accountName: account, customization: {} }],
+            distributors: [
+                {
+                    type: 'email',
+                    config: {
+                        recipients: [{ email: 'owner@example.com' }],
+                        subject: `Account Plan: ${account} - ${new Date().toISOString().split('T')[0]}`,
+                        template: 'summary'
+                    }
+                },
+                {
+                    type: 'slack',
+                    config: {
+                        channels: [{ channel: '#dealflow' }],
+                        // dynamic routing: add alert/normal channels based on health score
+                        routing: {
+                            alertThreshold: 70,
+                            alertChannel: '#sales-alerts',
+                            normalChannel: '#account-planning',
+                            alsoChannels: ['#dealflow']
+                        },
+                        format: 'dealflow',
+                        mentions: []
+                    }
+                }
+            ]
+        };
+
+        try {
+            this.showLoading();
+            const res = await fetch('/workflows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Failed to create demo workflow');
+            await this.loadWorkflows();
+            if (runAfterCreate) {
+                await this.runWorkflow(data.workflow.id);
+            } else {
+                alert('Demo workflow created.');
+            }
+        } catch (err) {
+            alert(`Failed to create demo workflow: ${err.message}`);
         } finally {
             this.hideLoading();
         }
@@ -663,11 +826,17 @@ class Dashboard {
     }
 }
 
-// Initialize dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    const d = new Dashboard();
-    const saveBtn = document.getElementById('saveSettingsBtn');
-    const applyBtn = document.getElementById('applySettingsBtn');
-    if (saveBtn) saveBtn.addEventListener('click', () => d.saveSettings());
-    if (applyBtn) applyBtn.addEventListener('click', () => d.applySettings());
-});
+    // Initialize dashboard when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        const d = new Dashboard();
+        const saveBtn = document.getElementById('saveSettingsBtn');
+        const applyBtn = document.getElementById('applySettingsBtn');
+        if (saveBtn) saveBtn.addEventListener('click', () => d.saveSettings());
+        if (applyBtn) applyBtn.addEventListener('click', () => d.applySettings());
+
+        // Demo workflow buttons
+        const createDemo = document.getElementById('createDemoWorkflowBtn');
+        const createRunDemo = document.getElementById('createAndRunDemoWorkflowBtn');
+        if (createDemo) createDemo.addEventListener('click', () => d.createDemoWorkflow(false));
+        if (createRunDemo) createRunDemo.addEventListener('click', () => d.createDemoWorkflow(true));
+    });

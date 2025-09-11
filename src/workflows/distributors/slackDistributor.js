@@ -33,7 +33,7 @@ export class SlackDistributor {
   }
 
   async distribute(accountPlan, config, context) {
-    const { channels, format = 'detailed', mentions = [] } = config;
+    const { channels = [], format = 'detailed', mentions = [], routing } = config;
     const { accountName, executionId } = context;
 
     this.logger.info('💬 Distributing account plan via Slack', {
@@ -46,8 +46,33 @@ export class SlackDistributor {
     try {
       const results = [];
       
-      // Send to each configured channel
-      for (const channelConfig of channels) {
+      // Determine target channels (optional routing by health score)
+      let targetChannels = channels;
+      try {
+        if (routing) {
+          const score = accountPlan?.accountOverview?.healthScore?.score ?? null;
+          const computed = new Set();
+          if (Array.isArray(routing.alsoChannels)) {
+            routing.alsoChannels.forEach(c => computed.add(c));
+          }
+          if (typeof score === 'number') {
+            if (score < (routing.alertThreshold ?? 70)) {
+              if (routing.alertChannel) computed.add(routing.alertChannel);
+            } else if (routing.normalChannel) {
+              computed.add(routing.normalChannel);
+            }
+          }
+          // Merge any provided static channels
+          channels.forEach(c => c?.channel && computed.add(c.channel));
+          targetChannels = Array.from(computed).map(ch => ({ channel: ch }));
+        }
+      } catch (_) {
+        // fall back silently
+        targetChannels = channels;
+      }
+
+      // Send to each configured/target channel
+      for (const channelConfig of targetChannels) {
         const result = await this.sendToChannel(
           channelConfig,
           accountPlan,
@@ -148,9 +173,44 @@ export class SlackDistributor {
       case 'alert':
         return this.generateAlertMessage(accountPlan, mentions, context);
       
+      case 'dealflow':
+        return this.generateDealflowMessage(accountPlan, mentions, context);
+      
       default:
         return this.generateDefaultMessage(accountPlan, mentions, context);
     }
+  }
+
+  generateDealflowMessage(accountPlan, mentions, context) {
+    const { accountName } = context;
+    const score = accountPlan?.accountOverview?.healthScore?.score ?? 'N/A';
+    const healthEmoji = typeof score === 'number' ? (score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴') : '🟡';
+    const core = accountPlan?.metadata?.dataSources?.dataSourcesBreakdown?.coreGTM || {};
+    const emailsCount = core.emails ?? 0;
+    const callsCount = core.calls ?? 0;
+    const personasCount = core.stakeholders ?? 0;
+    const topRec = (accountPlan?.actionPlan?.nextSteps || [])[0] || 'Follow up with key stakeholders';
+    const mentionsText = mentions.length > 0 ? `<@${mentions[0]}>` : '@account-owner';
+
+    // Compose primary line and detailed blocks
+    const primary = `🤖 Account Plan: ${accountName} ${healthEmoji} 📊 Health: ${score}/100 🎯 Priority: ${typeof topRec === 'string' ? topRec : (topRec.action || 'Top priority')} 👥 Owner: ${mentionsText}`;
+
+    // Data details section referencing People.ai demo table (sample)
+    const details = `Data (People.ai demo table): ${emailsCount} emails • ${callsCount} calls • ${personasCount} personas`;
+
+    // Next steps bullets
+    const nexts = (accountPlan?.actionPlan?.nextSteps || []).slice(0, 3).map(a => `• ${typeof a === 'string' ? a : (a.action || 'Action')} ${a.timeline ? `(${a.timeline})` : ''}`).join('\n');
+
+    const text = `${primary}\n${details}\n${nexts}`;
+
+    return {
+      text,
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn', text: primary } },
+        { type: 'context', elements: [{ type: 'mrkdwn', text: details }] },
+        nexts ? { type: 'section', text: { type: 'mrkdwn', text: `*Next Steps*\n${nexts}` } } : undefined
+      ].filter(Boolean)
+    };
   }
 
   generateSummaryMessage(accountPlan, mentions, context) {
