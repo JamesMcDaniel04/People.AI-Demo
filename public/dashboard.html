@@ -95,6 +95,26 @@
                                         <option value="openai">OpenAI</option>
                                         <option value="anthropic">Anthropic</option>
                                     </select>
+                                    <div class="provider-choices" id="aiProviderChips">
+                                        <button type="button" class="provider-card" data-provider="openai">
+                                            <img src="/static/img/logos/openai.svg" alt="OpenAI">
+                                            <span class="provider-name">OpenAI</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="anthropic">
+                                            <img src="/static/img/logos/anthropic.svg" alt="Anthropic">
+                                            <span class="provider-name">Anthropic</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="mixed">
+                                            <i class="fas fa-layer-group" style="color:#3498db"></i>
+                                            <span class="provider-name">Mixed</span>
+                                        </button>
+                                    </div>
+                                    <div class="model-badges" aria-hidden="true">
+                                        <span class="model-badge">GPT-4o</span>
+                                        <span class="model-badge">GPT-4o mini</span>
+                                        <span class="model-badge">Claude 3.5 Sonnet</span>
+                                        <span class="model-badge">Claude 3 Haiku</span>
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label for="aiTemperature">Temperature</label>
@@ -107,6 +127,31 @@
                                 <div class="form-group">
                                     <label for="aiToolSystemPrompt">Tool System Prompt</label>
                                     <textarea id="aiToolSystemPrompt" placeholder="Customize the tool-enabled instruction"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Model Selection</label>
+                                    <div class="system-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                        <div>
+                                            <label for="aiModelHealth">Health Model</label>
+                                            <select id="aiModelHealth"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelOpportunities">Opportunities Model</label>
+                                            <select id="aiModelOpportunities"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelRisks">Risks Model</label>
+                                            <select id="aiModelRisks"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelRecommendations">Recommendations Model</label>
+                                            <select id="aiModelRecommendations"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelInsights">Insights Model</label>
+                                            <select id="aiModelInsights"></select>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -126,20 +171,32 @@
                                 </div>
                                 <div class="form-group">
                                     <label>MCP Servers</label>
-                                    <div>
-                                        <label><input type="checkbox" id="mcpGmail" /> Gmail</label>
-                                    </div>
-                                    <div>
-                                        <label><input type="checkbox" id="mcpCalendar" /> Google Calendar</label>
-                                    </div>
-                                    <div>
-                                        <label><input type="checkbox" id="mcpDrive" /> Google Drive</label>
-                                    </div>
-                                    <div>
-                                        <label><input type="checkbox" id="mcpSlack" /> Slack</label>
-                                    </div>
-                                    <div>
-                                        <label><input type="checkbox" id="mcpNotion" /> Notion</label>
+                                    <div class="mcp-grid">
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpGmail" />
+                                            <img src="/static/img/logos/gmail.svg" alt="Gmail">
+                                            <span class="mcp-name">Gmail</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpCalendar" />
+                                            <img src="/static/img/logos/googlecalendar.svg" alt="Google Calendar">
+                                            <span class="mcp-name">Google Calendar</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpDrive" />
+                                            <img src="/static/img/logos/googledrive.svg" alt="Google Drive">
+                                            <span class="mcp-name">Google Drive</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpSlack" />
+                                            <img src="/static/img/logos/slack.svg" alt="Slack">
+                                            <span class="mcp-name">Slack</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpNotion" />
+                                            <img src="/static/img/logos/notion.svg" alt="Notion">
+                                            <span class="mcp-name">Notion</span>
+                                        </label>
                                     </div>
                                     <small>Changes to data source/MCPs may require reload.</small>
                                 </div>
@@ -421,7 +478,10 @@
                                 <div class="partner-header">
                                     <div class="partner-title">
                                         <span class="partner-badge">Potential Integration</span>
-                                        <h3>People.ai Revenue Intelligence</h3>
+                                        <h3>
+                                            <span class="partner-logo"><img src="/static/img/logos/peopleai.jpg" alt="People.ai"></span>
+                                            People.ai Revenue Intelligence
+                                        </h3>
                                         <p class="partner-sub">Contact auto-capture, activity intelligence, and coaching</p>
                                     </div>
                                     <div class="partner-actions">
@@ -471,7 +531,15 @@
             <div class="footer-content">
                 <p>&copy; 2025 AI Account Planner - Demo Technical Exercise</p>
                 <div class="footer-links">
-                    <span>Powered by BullMQ + Redis + Mixed AI Models</span>
+                    <span>Powered by</span>
+                    <img src="/static/img/logos/redis.svg" alt="Redis" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>Redis</span>
+                    <span style="margin:0 8px;">•</span>
+                    <img src="/static/img/logos/openai.svg" alt="OpenAI" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>OpenAI</span>
+                    <span style="margin:0 8px;">+</span>
+                    <img src="/static/img/logos/anthropic.svg" alt="Anthropic" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>Anthropic</span>
                 </div>
             </div>
         </footer>

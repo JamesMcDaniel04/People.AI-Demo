@@ -93,6 +93,28 @@ class Dashboard {
         if (pplClose) pplClose.addEventListener('click', () => this.hidePeopleAIModal());
         if (pplSave) pplSave.addEventListener('click', () => this.savePeopleAIConfig());
 
+        // Provider chips selection sync with select
+        const providerChips = document.getElementById('aiProviderChips');
+        const providerSelect = document.getElementById('aiProvider');
+        if (providerChips && providerSelect) {
+            providerChips.addEventListener('click', (e) => {
+                const card = e.target.closest('.provider-card');
+                if (!card) return;
+                const value = card.dataset.provider;
+                if (!value) return;
+                providerSelect.value = value;
+                this.updateAIProviderChips(value);
+                this.renderModelSelects(value);
+            });
+            providerSelect.addEventListener('change', (e) => { 
+                this.updateAIProviderChips(e.target.value);
+                this.renderModelSelects(e.target.value);
+            });
+            // initialize state
+            this.updateAIProviderChips(providerSelect.value);
+            this.renderModelSelects(providerSelect.value);
+        }
+
         // Centralized click handling for workflows list
         const workflowsList = document.getElementById('workflowsList');
         if (workflowsList) {
@@ -386,23 +408,45 @@ class Dashboard {
             const response = await fetch('/integration/status');
             const data = await response.json();
             
-            // If integration tab is visible, render grid there; otherwise ignore silently
             const el = document.getElementById('integrationDetails');
             if (el) {
                 let content = '<div class="integration-grid">';
+                const src = (data.integration?.source || 'sample').toUpperCase();
                 content += `
                     <div class="integration-card">
                         <div class="integration-icon">
-                            <i class="fas fa-database"></i>
+                            <img src="/static/img/logos/airtable.svg" alt="Data Source">
                         </div>
-                        <div class="integration-name">${data.integration.source.toUpperCase()}</div>
-                        <div class="integration-status connected">${data.integration.source === 'sample' ? 'Connected' : 'Configured'}</div>
+                        <div class="integration-name">${src}</div>
+                        <div class="integration-status connected">${src === 'SAMPLE' ? 'Connected' : 'Configured'}</div>
                     </div>`;
+
+                const integrations = [
+                    { key: 'gmail', name: 'Gmail', logo: '/static/img/logos/gmail.svg' },
+                    { key: 'googleCalendar', name: 'Google Calendar', logo: '/static/img/logos/googlecalendar.svg' },
+                    { key: 'googleDrive', name: 'Google Drive', logo: '/static/img/logos/googledrive.svg' },
+                    { key: 'slack', name: 'Slack', logo: '/static/img/logos/slack.svg' },
+                    { key: 'notion', name: 'Notion', logo: '/static/img/logos/notion.svg' }
+                ];
+                const connected = (data.integration?.klavis?.servers) || (data.integration?.sample?.servers) || [];
+                const isOn = (k) => Array.isArray(connected) ? connected.includes(k) : false;
+                integrations.forEach(int => {
+                    const ok = isOn(int.key);
+                    content += `
+                        <div class="integration-card">
+                            <div class="integration-icon">
+                                <img src="${int.logo}" alt="${int.name}">
+                            </div>
+                            <div class="integration-name">${int.name}</div>
+                            <div class="integration-status ${ok ? 'connected' : 'disconnected'}">${ok ? 'Connected' : 'Disconnected'}</div>
+                        </div>`;
+                });
+
                 content += '</div>';
                 el.innerHTML = content;
             }
         } catch (error) {
-            // no-op if element is absent
+            // no-op
         }
     }
 
@@ -1110,9 +1154,21 @@ class Dashboard {
                 b.type = 'button';
                 b.className = 'provider-chip' + (p === active ? ' active' : '');
                 b.dataset.provider = p;
-                b.textContent = {
-                    gmail: 'Gmail', googleCalendar: 'Google Calendar', googleDrive: 'Google Drive', slack: 'Slack', notion: 'Notion'
+                const label = {
+                    gmail: 'Gmail',
+                    googleCalendar: 'Google Calendar',
+                    googleDrive: 'Google Drive',
+                    slack: 'Slack',
+                    notion: 'Notion'
                 }[p] || p;
+                const logo = {
+                    gmail: '/static/img/logos/gmail.svg',
+                    googleCalendar: '/static/img/logos/googlecalendar.svg',
+                    googleDrive: '/static/img/logos/googledrive.svg',
+                    slack: '/static/img/logos/slack.svg',
+                    notion: '/static/img/logos/notion.svg'
+                }[p];
+                b.innerHTML = logo ? `<img src="${logo}" alt="${label}"><span>${label}</span>` : label;
                 b.addEventListener('click', () => {
                     renderProviders(p);
                     renderTriggers(p, null);
@@ -1178,39 +1234,40 @@ class Dashboard {
             const data = await response.json();
             
             let content = '<div class="integration-grid">';
-            
-            if (data.integration.source === 'sample') {
-                content += `
-                    <div class="integration-card">
-                        <div class="integration-icon">
-                            <i class="fas fa-database"></i>
-                        </div>
-                        <div class="integration-name">Sample Data</div>
-                        <div class="integration-status connected">Connected</div>
+
+            const src = (data.integration?.source || 'sample').toUpperCase();
+            content += `
+                <div class="integration-card">
+                    <div class="integration-icon">
+                        <img src="/static/img/logos/airtable.svg" alt="Data Source">
                     </div>
-                `;
-            }
-            
-            // Add placeholder integration cards
+                    <div class="integration-name">${src === 'SAMPLE' ? 'Sample Data' : src}</div>
+                    <div class="integration-status connected">${src === 'SAMPLE' ? 'Connected' : 'Configured'}</div>
+                </div>
+            `;
+
             const integrations = [
-                { name: 'Gmail', icon: 'envelope', status: 'disconnected' },
-                { name: 'Google Calendar', icon: 'calendar', status: 'disconnected' },
-                { name: 'Slack', icon: 'slack', status: 'disconnected' },
-                { name: 'CRM', icon: 'users', status: 'disconnected' }
+                { key: 'gmail', name: 'Gmail', logo: '/static/img/logos/gmail.svg' },
+                { key: 'googleCalendar', name: 'Google Calendar', logo: '/static/img/logos/googlecalendar.svg' },
+                { key: 'googleDrive', name: 'Google Drive', logo: '/static/img/logos/googledrive.svg' },
+                { key: 'slack', name: 'Slack', logo: '/static/img/logos/slack.svg' },
+                { key: 'notion', name: 'Notion', logo: '/static/img/logos/notion.svg' }
             ];
-            
-            integrations.forEach(integration => {
+            const connected = (data.integration?.klavis?.servers) || (data.integration?.sample?.servers) || [];
+            const isOn = (k) => Array.isArray(connected) ? connected.includes(k) : false;
+            integrations.forEach(int => {
+                const ok = isOn(int.key);
                 content += `
                     <div class="integration-card">
                         <div class="integration-icon">
-                            <i class="fab fa-${integration.icon}"></i>
+                            <img src="${int.logo}" alt="${int.name}">
                         </div>
-                        <div class="integration-name">${integration.name}</div>
-                        <div class="integration-status ${integration.status}">${integration.status}</div>
+                        <div class="integration-name">${int.name}</div>
+                        <div class="integration-status ${ok ? 'connected' : 'disconnected'}">${ok ? 'Connected' : 'Disconnected'}</div>
                     </div>
                 `;
             });
-            
+
             content += '</div>';
             document.getElementById('integrationDetails').innerHTML = content;
         } catch (error) {
@@ -1389,6 +1446,8 @@ class Dashboard {
             document.getElementById('aiTemperature').value = cur.ai.temperature;
             document.getElementById('aiSystemPrompt').value = cur.ai.systemPrompt || '';
             document.getElementById('aiToolSystemPrompt').value = cur.ai.toolSystemPrompt || '';
+            this.updateAIProviderChips(cur.ai.provider);
+            this.renderModelSelects(cur.ai.provider, cur.ai.models);
             // Data/MCP
             document.getElementById('dataSource').value = cur.data.source;
             const servers = cur.data.mcp?.servers || {};
@@ -1404,6 +1463,15 @@ class Dashboard {
         }
     }
 
+    updateAIProviderChips(active) {
+        const wrap = document.getElementById('aiProviderChips');
+        if (!wrap) return;
+        Array.from(wrap.querySelectorAll('.provider-card')).forEach(card => {
+            if (card.dataset.provider === active) card.classList.add('active');
+            else card.classList.remove('active');
+        });
+    }
+
     collectSettingsPayload() {
         const aiProvider = document.getElementById('aiProvider').value;
         const aiTemperature = parseFloat(document.getElementById('aiTemperature').value || '0.1');
@@ -1411,6 +1479,15 @@ class Dashboard {
         const aiToolSystemPrompt = document.getElementById('aiToolSystemPrompt').value;
         const dataSource = document.getElementById('dataSource').value;
         const logLevel = document.getElementById('logLevel').value;
+
+        // Model selections
+        const models = {
+            health: document.getElementById('aiModelHealth')?.value || 'claude-3-5-sonnet-20241022',
+            opportunities: document.getElementById('aiModelOpportunities')?.value || 'gpt-4o',
+            risks: document.getElementById('aiModelRisks')?.value || 'claude-3-5-sonnet-20241022',
+            recommendations: document.getElementById('aiModelRecommendations')?.value || 'gpt-4o',
+            insights: document.getElementById('aiModelInsights')?.value || 'claude-3-5-sonnet-20241022'
+        };
 
         const mcp = {
             servers: {
@@ -1427,7 +1504,8 @@ class Dashboard {
                 provider: aiProvider,
                 temperature: aiTemperature,
                 systemPrompt: aiSystemPrompt,
-                toolSystemPrompt: aiToolSystemPrompt
+                toolSystemPrompt: aiToolSystemPrompt,
+                models
             },
             data: {
                 source: dataSource
@@ -1454,6 +1532,47 @@ class Dashboard {
         } finally {
             this.hideLoading();
         }
+    }
+
+    // Render model selects based on provider
+    renderModelSelects(provider, currentModels = null) {
+        const modelOptions = {
+            openai: [
+                { value: 'gpt-4o', label: 'GPT-4o' },
+                { value: 'gpt-4o-mini', label: 'GPT-4o mini' }
+            ],
+            anthropic: [
+                { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+                { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' }
+            ]
+        };
+        const combined = [...modelOptions.openai, ...modelOptions.anthropic];
+        const pick = provider === 'openai' ? modelOptions.openai
+                  : provider === 'anthropic' ? modelOptions.anthropic
+                  : combined;
+
+        const sets = [
+            { id: 'aiModelHealth', key: 'health' },
+            { id: 'aiModelOpportunities', key: 'opportunities' },
+            { id: 'aiModelRisks', key: 'risks' },
+            { id: 'aiModelRecommendations', key: 'recommendations' },
+            { id: 'aiModelInsights', key: 'insights' }
+        ];
+
+        sets.forEach(({ id, key }) => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = '';
+            pick.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt.value;
+                o.textContent = opt.label;
+                sel.appendChild(o);
+            });
+            const want = (currentModels && currentModels[key]) || prev || pick[0]?.value;
+            if (want) sel.value = want;
+        });
     }
 
     async applySettings() {

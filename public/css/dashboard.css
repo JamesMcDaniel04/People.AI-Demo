@@ -727,6 +727,55 @@ body {
     color: #bdc3c7;
 }
 
+/* Logo and provider/model chips */
+.provider-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.provider-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    background: #f8f9fa;
+    border: 2px solid #ecf0f1;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.provider-card:hover { border-color: #3498db; }
+.provider-card.active { border-color: #3498db; background: #eef6fb; box-shadow: 0 2px 8px rgba(52,152,219,0.15); }
+
+.provider-card img { width: 22px; height: 22px; object-fit: contain; }
+.provider-card .provider-name { font-weight: 600; color: #2c3e50; }
+
+.model-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.model-badge { font-size: 0.75rem; padding: 0.25rem 0.45rem; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; }
+
+/* MCP grid with logo toggles */
+.mcp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+.mcp-toggle { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; background: #f8f9fa; border: 2px solid #ecf0f1; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; }
+.mcp-toggle:hover { border-color: #3498db; }
+.mcp-toggle input { accent-color: #3498db; }
+.mcp-toggle img { width: 22px; height: 22px; object-fit: contain; }
+.mcp-toggle .mcp-name { font-weight: 600; color: #2c3e50; }
+
+/* Provider chips in mini triggers */
+.provider-chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff; color: #334155; cursor: pointer; margin: 0.2rem; }
+.provider-chip img { width: 16px; height: 16px; object-fit: contain; }
+.provider-chip.active { background: #eef6fb; border-color: #3498db; color: #1e293b; }
+
+/* Images within integration cards */
+.integration-icon img { width: 36px; height: 36px; object-fit: contain; display: inline-block; }
+
+/* People.ai header logo */
+.partner-logo { display: inline-flex; align-items: center; gap: 0.5rem; }
+.partner-logo img { width: 24px; height: 24px; object-fit: contain; }
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .dashboard-container {
