@@ -13,6 +13,8 @@ class Dashboard {
         await this.loadQueueStats();
         // Initialize demo mini scheduler UI (optional schedule)
         this.initDemoMiniScheduler();
+        // Initialize editable sections (Goals, Integrations, Instructions)
+        this.initEditableDemoSections();
     }
 
     setupEventListeners() {
@@ -326,6 +328,8 @@ class Dashboard {
             case 'workflows':
                 await this.loadWorkflows();
                 await this.loadQueueStats();
+                // Re-init editable sections when switching to Workflows
+                this.initEditableDemoSections();
                 break;
             case 'integration':
                 await this.loadIntegrationStatus();
@@ -333,6 +337,156 @@ class Dashboard {
             case 'settings':
                 await this.loadSettings();
                 break;
+        }
+    }
+
+    // Simple HTML-safe encode for labels (not content)
+    _escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Make the three demo workflow cards editable with localStorage persistence
+    initEditableDemoSections() {
+        const cards = document.querySelectorAll('.system-card[data-edit-key]');
+        if (!cards || cards.length === 0) return;
+
+        cards.forEach(card => {
+            try {
+                const key = card.getAttribute('data-edit-key');
+                const title = card.getAttribute('data-edit-title') || 'Section';
+                if (!key) return;
+
+                const header = card.querySelector('.card-header');
+                const content = card.querySelector('.card-content');
+                if (!header || !content) return;
+
+                // Ensure we only initialize once
+                if (card.dataset.editInit === '1') {
+                    // still refresh view state from storage
+                    this._refreshEditableCard(card, key, title);
+                    return;
+                }
+
+                // Wrap default content
+                const defaultHTML = content.innerHTML;
+                content.innerHTML = `
+                    <div class="default-content">${defaultHTML}</div>
+                    <div class="custom-content" style="display:none; margin-top:8px; padding:10px; border-left:3px solid #6c8cff; background:#f6f8ff; border-radius:4px;">
+                        <div style="font-size:12px; font-weight:600; color:#334; margin-bottom:6px;">
+                            <i class="fas fa-user-edit" style="margin-right:6px;"></i> Your customization
+                        </div>
+                        <div class="custom-body"></div>
+                    </div>
+                    <div class="edit-panel" style="display:none; margin-top:10px;">
+                        <div style="font-size:12px; color:#556; margin-bottom:6px;">Editing ${this._escapeHtml(title)} (HTML allowed)</div>
+                        <textarea class="edit-text" style="width:100%; min-height:140px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12px; border:1px solid #ccd; border-radius:4px;"></textarea>
+                        <div style="margin-top:8px; display:flex; gap:8px;">
+                            <button type="button" class="primary-button btn-save-edit"><i class="fas fa-save"></i> Save</button>
+                            <button type="button" class="secondary-button btn-cancel-edit"><i class="fas fa-times"></i> Cancel</button>
+                        </div>
+                    </div>
+                `;
+
+                // Add header actions
+                let actions = header.querySelector('.header-actions');
+                if (!actions) {
+                    actions = document.createElement('div');
+                    actions.className = 'header-actions';
+                    header.appendChild(actions);
+                }
+                actions.innerHTML = `${actions.innerHTML || ''}
+                    <button class="secondary-button btn-edit-content" title="Customize ${this._escapeHtml(title)}" style="padding:4px 8px;">
+                        <i class="fas fa-pen"></i> Edit
+                    </button>
+                    <button class="secondary-button btn-reset-content" title="Reset customization" style="padding:4px 8px; display:none;">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                `;
+
+                // Wire up events
+                const editBtn = header.querySelector('.btn-edit-content');
+                const resetBtn = header.querySelector('.btn-reset-content');
+                const editPanel = content.querySelector('.edit-panel');
+                const textarea = content.querySelector('.edit-text');
+                const customWrap = content.querySelector('.custom-content');
+                const customBody = content.querySelector('.custom-body');
+                const defaultWrap = content.querySelector('.default-content');
+
+                // Load existing customization
+                const saved = localStorage.getItem(key);
+                if (saved && saved.trim()) {
+                    customBody.innerHTML = saved;
+                    customWrap.style.display = 'block';
+                    if (resetBtn) resetBtn.style.display = '';
+                }
+
+                // Open editor prefilled (prefer saved, else default)
+                editBtn?.addEventListener('click', () => {
+                    const current = localStorage.getItem(key);
+                    textarea.value = current && current.trim() ? current : defaultWrap.innerHTML.trim();
+                    editPanel.style.display = 'block';
+                    textarea.focus();
+                });
+
+                // Save customization
+                content.querySelector('.btn-save-edit')?.addEventListener('click', () => {
+                    const val = textarea.value;
+                    try {
+                        if (val && val.trim()) {
+                            localStorage.setItem(key, val);
+                            customBody.innerHTML = val;
+                            customWrap.style.display = 'block';
+                            if (resetBtn) resetBtn.style.display = '';
+                        }
+                    } catch (e) {
+                        console.error('Failed to save customization for', key, e);
+                    }
+                    editPanel.style.display = 'none';
+                });
+
+                // Cancel editing
+                content.querySelector('.btn-cancel-edit')?.addEventListener('click', () => {
+                    editPanel.style.display = 'none';
+                });
+
+                // Reset customization
+                resetBtn?.addEventListener('click', () => {
+                    localStorage.removeItem(key);
+                    customBody.innerHTML = '';
+                    customWrap.style.display = 'none';
+                    resetBtn.style.display = 'none';
+                });
+
+                card.dataset.editInit = '1';
+            } catch (e) {
+                console.warn('Editable section init failed:', e);
+            }
+        });
+    }
+
+    _refreshEditableCard(card, key, title) {
+        try {
+            const content = card.querySelector('.card-content');
+            if (!content) return;
+            const customWrap = content.querySelector('.custom-content');
+            const customBody = content.querySelector('.custom-body');
+            const resetBtn = card.querySelector('.btn-reset-content');
+            const saved = localStorage.getItem(key);
+            if (saved && saved.trim()) {
+                customBody.innerHTML = saved;
+                if (customWrap) customWrap.style.display = 'block';
+                if (resetBtn) resetBtn.style.display = '';
+            } else {
+                if (customWrap) customWrap.style.display = 'none';
+                if (resetBtn) resetBtn.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Editable section refresh failed:', e);
         }
     }
 
