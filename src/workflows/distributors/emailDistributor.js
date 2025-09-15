@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Logger } from '../../utils/logger.js';
+import { getRedisService } from '../../services/redisService.js';
 
 export class EmailDistributor {
   constructor(config) {
@@ -9,6 +10,7 @@ export class EmailDistributor {
     this.postmarkBaseUrl = 'https://api.postmarkapp.com';
     this.fromEmail = null;
     this.mockMode = false;
+    this.redis = getRedisService(config);
   }
 
   async initialize() {
@@ -61,9 +63,29 @@ export class EmailDistributor {
       // Generate email content based on template
       const emailContent = this.generateEmailContent(accountPlan, template, context);
 
+      // Idempotency: avoid duplicate sends for same plan+recipient
+      const dedupeKeyBase = `${accountName}:${accountPlan?.metadata?.generatedDate || ''}`;
+      const sentSet = new Set();
+
       // Send to each recipient
       const results = [];
       for (const recipient of recipients) {
+        const dedupeKey = `${dedupeKeyBase}:${recipient.email}`;
+        if (sentSet.has(dedupeKey)) continue;
+        // Redis-based idempotency (24h TTL)
+        const redisKey = `${process.env.JOB_QUEUE_PREFIX || 'ai-account-planner'}:dedupe:email:${dedupeKey}`;
+        let skip = false;
+        try {
+          if (this.redis && this.redis.isConnected()) {
+            const exists = await this.redis.redis.get(redisKey);
+            if (exists) skip = true; else await this.redis.redis.setex(redisKey, 86400, '1');
+          }
+        } catch (_) {}
+        if (skip) {
+          this.logger.info('⏭️ Skipping duplicate Email', { recipient: recipient.email, accountName });
+          continue;
+        }
+
         const result = await this.sendEmail(
           recipient,
           subject || `Account Plan: ${accountName}`,
@@ -72,6 +94,7 @@ export class EmailDistributor {
           context
         );
         results.push(result);
+        if (result.status === 'sent') sentSet.add(dedupeKey);
       }
 
       return {

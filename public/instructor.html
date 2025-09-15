@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent Instructor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background: #f7f7fb; }
+      .wrap { max-width: 980px; margin: 0 auto; }
+      h1 { margin: 0 0 8px; }
+      .card { background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.06); padding: 16px 18px; margin: 16px 0; }
+      label { display:block; font-weight:600; margin: 12px 0 6px; }
+      input, textarea, select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d8d8e0; border-radius: 8px; font-size: 14px; }
+      textarea { min-height: 120px; resize: vertical; }
+      button { background:#5b6bff; border:0; border-radius:8px; color:#fff; padding:11px 16px; font-weight:600; cursor:pointer; }
+      button:disabled { opacity:.5; cursor: default; }
+      .row { display:flex; gap:12px; }
+      .row > div { flex:1; }
+      pre { white-space: pre-wrap; background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; overflow:auto; }
+      .small { color:#666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Agent Instructor</h1>
+      <div class="small">Replicates Den-style instructor input with real OpenAI/Anthropic support.</div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Account Name</label>
+            <input id="account" placeholder="e.g., stripe or contoso" />
+          </div>
+          <div>
+            <label>Provider</label>
+            <select id="provider">
+              <option value="mixed">mixed</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+            </select>
+          </div>
+          <div>
+            <label>Model</label>
+            <input id="model" placeholder="leave empty to use defaults" />
+          </div>
+        </div>
+        <label>Agent Instructor (system override)</label>
+        <textarea id="instructions" placeholder="Describe how the agent should behave, priorities, tone, constraints..."></textarea>
+        <label>Optional Prompt (freeform)</label>
+        <textarea id="prompt" placeholder="Override the default plan prompt if desired"></textarea>
+        <div style="margin-top:12px">
+          <button id="run">Generate Plan</button>
+        </div>
+      </div>
+
+      <div id="out" class="card" style="display:none">
+        <div style="font-weight:600;margin-bottom:8px">Result</div>
+        <pre id="result"></pre>
+      </div>
+    </div>
+
+    <script>
+      const el = (id) => document.getElementById(id);
+      el('run').addEventListener('click', async () => {
+        const btn = el('run');
+        btn.disabled = true; btn.textContent = 'Running...';
+        try {
+          const body = {
+            accountName: el('account').value.trim() || 'stripe',
+            instructions: el('instructions').value.trim() || 'Be concise and accurate; prioritize executive-ready output.',
+            prompt: el('prompt').value.trim() || undefined,
+            provider: el('provider').value,
+            modelName: el('model').value.trim() || undefined
+          };
+          const resp = await fetch('/instructor/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const json = await resp.json();
+          el('out').style.display = 'block';
+          el('result').textContent = JSON.stringify(json, null, 2);
+        } catch (e) {
+          el('out').style.display = 'block';
+          el('result').textContent = 'Error: ' + e.message;
+        } finally {
+          btn.disabled = false; btn.textContent = 'Generate Plan';
+        }
+      });
+    </script>
+  </body>
+  </html>
+

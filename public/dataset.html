@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Dataset Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background: #f7f7fb; }
+      .wrap { max-width: 980px; margin: 0 auto; }
+      .card { background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.06); padding: 16px 18px; margin: 16px 0; }
+      label { display:block; font-weight:600; margin: 12px 0 6px; }
+      input, button { padding: 10px 12px; border-radius: 8px; border: 1px solid #d8d8e0; }
+      button { background:#5b6bff; border:0; color:#fff; font-weight:600; cursor:pointer; }
+      .counts { display:flex; gap:12px; }
+      .counts div { background:#f0f3ff; border-radius:8px; padding:10px 12px; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Dataset Viewer</h1>
+      <div class="card">
+        <label>Account Name</label>
+        <input id="account" value="stripe" />
+        <div style="margin-top:12px">
+          <button id="load">Load Summary</button>
+          <button id="sync">Sync External</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="counts" id="counts"></div>
+        <div style="margin-top:12px">
+          <a href="/instructor">Go to Plan Generator</a>
+        </div>
+      </div>
+      <div class="card">
+        <div id="log"></div>
+      </div>
+    </div>
+    <script>
+      const el = id => document.getElementById(id);
+      async function summary() {
+        const a = el('account').value.trim() || 'stripe';
+        const res = await fetch(`/data/${encodeURIComponent(a)}/summary`);
+        const j = await res.json();
+        const c = j.counts || {};
+        el('counts').innerHTML = `
+          <div>Emails: <b>${c.emails||0}</b></div>
+          <div>Calls: <b>${c.calls||0}</b></div>
+          <div>Stakeholders: <b>${c.stakeholders||0}</b></div>
+          <div>Interactions: <b>${c.interactions||0}</b></div>
+          <div>External News: <b>${c.external||0}</b></div>
+        `;
+      }
+      el('load').onclick = summary;
+      el('sync').onclick = async () => {
+        const a = el('account').value.trim() || 'stripe';
+        const res = await fetch(`/external/sync`, { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ accountName: a }) });
+        const j = await res.json();
+        el('log').textContent = JSON.stringify(j, null, 2);
+        await summary();
+      };
+      summary();
+    </script>
+  </body>
+  </html>
+

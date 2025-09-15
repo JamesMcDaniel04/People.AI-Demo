@@ -23,6 +23,8 @@
     "lint": "eslint src/",
     "typecheck": "node --check src/**/*.js",
     "validate": "npm run typecheck && npm run lint && npm test",
+    "validate:data": "node scripts/validate-data.js",
+    "validate:plan": "node scripts/validate-plan.js",
     "deploy": "npm run validate && npm run start:prod",
     "graphrag:start": "./scripts/start-graphrag.sh",
     "graphrag:stop": "docker-compose down",
@@ -30,7 +32,10 @@
     "graphrag:build": "docker-compose build graphrag-service",
     "neo4j:start": "docker-compose up -d neo4j",
     "neo4j:stop": "docker-compose stop neo4j",
-    "neo4j:browser": "open http://localhost:7474"
+    "neo4j:browser": "open http://localhost:7474",
+    "demo:reset": "node scripts/demo-reset.js",
+    "demo:seed": "node scripts/validate-data.js",
+    "demo:warm": "node -e \"fetch('http://localhost:'+ (process.env.WORKFLOW_PORT||3001) +'/health').catch(()=>{});\""
   },
   "keywords": [
     "ai",

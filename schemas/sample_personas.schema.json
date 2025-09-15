@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SamplePersonas",
+  "type": "object",
+  "required": ["stripe_team", "customer_stakeholders"],
+  "properties": {
+    "stripe_team": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["name", "role", "style"], "properties": {"name": {"type": "string"}, "role": {"type": "string"}, "style": {"type": "string"}}}},
+    "customer_stakeholders": {"type": "array", "minItems": 4, "items": {"type": "object", "required": ["name", "role", "persona_type"], "properties": {"name": {"type": "string"}, "role": {"type": "string"}, "persona_type": {"type": "string"}}}}
+  }
+}
+

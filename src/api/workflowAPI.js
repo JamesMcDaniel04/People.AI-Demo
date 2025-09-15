@@ -5,12 +5,15 @@ import { createDemoAPI } from './demoAPI.js';
 import { createGraphAPI } from './graphAPI.js';
 import { createAuthAPI } from './authAPI.js';
 import { createSettingsAPI } from './settingsAPI.js';
+import { createInstructorAPI } from './instructorAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { ExpressAdapter } from '@bull-board/express';
+import { metrics } from '../services/metricsService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowAPI {
   constructor(config) {
@@ -39,13 +42,21 @@ export class WorkflowAPI {
     const __dirname = dirname(__filename);
     this.app.use('/static', express.static(join(__dirname, '../../public')));
 
-    // Request logging
+    // Correlation ID + Request logging + latency
     this.app.use((req, res, next) => {
+      const correlationId = req.headers['x-correlation-id'] || uuidv4();
+      res.setHeader('x-correlation-id', correlationId);
+      req.correlationId = correlationId;
+      const t = metrics.time(`http:${req.method}:${req.path}`);
+      res.on('finish', () => {
+        t.finish(res.statusCode < 500);
+      });
       this.logger.info('API Request', {
         method: req.method,
         url: req.url,
         ip: req.ip,
-        userAgent: req.get('User-Agent')
+        userAgent: req.get('User-Agent'),
+        correlationId
       });
       next();
     });
@@ -90,8 +101,14 @@ export class WorkflowAPI {
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: this.config.app.version
+        version: this.config.app.version,
+        correlationId: req.correlationId
       });
+    });
+
+    // Simple metrics snapshot
+    this.app.get('/metrics', (_req, res) => {
+      res.json(metrics.snapshot());
     });
 
     // Workflow management routes
@@ -112,6 +129,8 @@ export class WorkflowAPI {
     
     // Integration status
     this.app.get('/integration/status', this.getIntegrationStatus.bind(this));
+    this.app.post('/external/sync', this.syncExternal.bind(this));
+    this.app.get('/data/:account/summary', this.getDataSummary.bind(this));
 
     // Minimal Klavis OAuth (demo stub)
     this.app.get('/auth/klavis/start', this.startKlavisAuth.bind(this));
@@ -120,6 +139,14 @@ export class WorkflowAPI {
     // Template routes
     this.app.get('/templates', this.getWorkflowTemplates.bind(this));
     this.app.post('/templates/:templateId/create', this.createFromTemplate.bind(this));
+
+    // Instructor API and simple UI
+    this.app.use('/instructor', createInstructorAPI(this.orchestrator, this.config));
+    this.app.get('/instructor', (req, res) => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      res.sendFile(join(__dirname, '../../public/instructor.html'));
+    });
 
     // Job queue management routes
     this.app.get('/queue/stats', this.getQueueStats.bind(this));
@@ -189,6 +216,62 @@ export class WorkflowAPI {
     }
     
     this.logger.info('✅ Workflow API initialized');
+
+    // Preload assessment-focused scheduled workflows if enabled by env
+    try {
+      await this.setupAssessmentDefaults();
+    } catch (e) {
+      this.logger.warn('⚠️ Assessment defaults setup skipped', { error: e.message });
+    }
+  }
+
+  // Pre-install a minimal set of workflows that directly map to the assessment requirements
+  async setupAssessmentDefaults() {
+    const preload = process.env.ASSESSMENT_PRELOAD === 'true';
+    if (!preload) return;
+
+    const accountsEnv = process.env.ASSESSMENT_ACCOUNTS || 'stripe,acme retail,healthtrack.io';
+    const accounts = accountsEnv.split(',').map(a => a.trim()).filter(Boolean).map(a => ({ accountName: a }));
+    const slackChannel = process.env.ASSESSMENT_SLACK_CHANNEL || process.env.SLACK_DEFAULT_CHANNEL || '#account-planning';
+    const execEmail = process.env.ASSESSMENT_EXEC_EMAIL || 'executives@company.com';
+
+    const daily = {
+      name: 'Daily Account Health (Assessment)',
+      description: 'Daily health summary to Slack for key accounts',
+      trigger: { type: 'schedule' },
+      schedule: '0 9 * * *',
+      accounts,
+      distributors: [
+        { type: 'slack', config: { channels: [{ channel: slackChannel }], format: 'summary', mentions: [] } }
+      ],
+      enabled: true,
+      engine: 'internal'
+    };
+
+    const weekly = {
+      name: 'Weekly Executive Report (Assessment)',
+      description: 'Weekly detailed account plan to executives via email',
+      trigger: { type: 'schedule' },
+      schedule: '0 8 * * 1',
+      accounts: accounts.slice(0, 1),
+      distributors: [
+        { type: 'email', config: { recipients: [{ email: execEmail }], template: 'executive', subject: 'Weekly Executive Account Report' } }
+      ],
+      enabled: true,
+      engine: 'internal'
+    };
+
+    const ensure = async (wf) => {
+      try {
+        const created = await this.orchestrator.createWorkflow(wf);
+        this.logger.info('✅ Assessment workflow created', { name: created.name, schedule: created.schedule });
+      } catch (err) {
+        this.logger.warn('⚠️ Could not create assessment workflow', { name: wf.name, error: err.message });
+      }
+    };
+
+    await ensure(daily);
+    await ensure(weekly);
   }
 
   // Workflow CRUD operations
@@ -660,6 +743,34 @@ export class WorkflowAPI {
     } catch (error) {
       this.logger.error('❌ Failed to get integration status', { error: error.message });
       res.status(500).json({ error: 'Failed to get integration status', message: error.message });
+    }
+  }
+
+  async syncExternal(req, res) {
+    try {
+      const accountName = (req.body && req.body.accountName) || 'stripe';
+      const data = await this.orchestrator.dataManager.getAccountData(accountName);
+      const externalCount = (data.external?.[0]?.data?.news || []).length || 0;
+      res.json({ status: 'success', accountName, externalNews: externalCount, lastSync: new Date().toISOString() });
+    } catch (error) {
+      this.logger.error('External sync failed', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async getDataSummary(req, res) {
+    try {
+      const accountName = req.params.account || 'stripe';
+      const data = await this.orchestrator.dataManager.getAccountData(accountName);
+      const emails = (data.emails?.[0]?.data || data.emails || []).length || 0;
+      const calls = (data.calls?.[0]?.data || data.calls || []).length || 0;
+      const stakeholders = (data.stakeholders?.[0]?.data || data.stakeholders || []).length || 0;
+      const interactions = (data.interactions?.[0]?.data || data.interactions || []).length || 0;
+      const external = (data.external?.[0]?.data?.news || []).length || 0;
+      res.json({ status: 'success', accountName, counts: { emails, calls, stakeholders, interactions, external } });
+    } catch (error) {
+      this.logger.error('Failed to get data summary', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
     }
   }
 

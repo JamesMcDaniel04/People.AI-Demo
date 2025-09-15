@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SampleCalls",
+  "type": "object",
+  "required": ["calls"],
+  "properties": {
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["call_id", "type", "date", "participants", "transcript"],
+        "properties": {
+          "call_id": {"type": "string"},
+          "type": {"type": "string"},
+          "date": {"type": "string"},
+          "participants": {"type": "array", "items": {"type": "string"}},
+          "duration": {"type": "string"},
+          "transcript": {
+            "type": "array",
+            "items": {"type": "object", "required": ["speaker", "text"], "properties": {"speaker": {"type": "string"}, "text": {"type": "string"}}}
+          },
+          "actionItems": {"type": "array", "items": {"type": "object", "required": ["id", "owner", "action"], "properties": {"id": {"type": "string"}, "owner": {"type": "string"}, "action": {"type": "string"}, "due": {"type": "string"}}}}
+        }
+      }
+    }
+  }
+}
+

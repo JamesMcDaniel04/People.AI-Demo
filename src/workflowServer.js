@@ -56,22 +56,25 @@ class WorkflowServer {
 
   validateEnvironment() {
     const source = (config.data?.source || 'mcp').toLowerCase();
+    const assessmentMode = process.env.ASSESSMENT_MODE === 'true' || process.env.ASSESSMENT_PRELOAD === 'true';
     const required = [];
 
     // Require AI keys based on provider
-    if (config.ai.provider === 'mixed') {
-      required.push(
-        { key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey },
-        { key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey }
-      );
-    } else if (config.ai.provider === 'openai') {
-      required.push({ key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey });
-    } else if (config.ai.provider === 'anthropic') {
-      required.push({ key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey });
+    if (!assessmentMode) {
+      if (config.ai.provider === 'mixed') {
+        required.push(
+          { key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey },
+          { key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey }
+        );
+      } else if (config.ai.provider === 'openai') {
+        required.push({ key: 'OPENAI_API_KEY', value: config.ai.openai.apiKey });
+      } else if (config.ai.provider === 'anthropic') {
+        required.push({ key: 'ANTHROPIC_API_KEY', value: config.ai.anthropic.apiKey });
+      }
     }
 
     // Only require Klavis when using MCP
-    if (source === 'mcp') {
+    if (source === 'mcp' && !assessmentMode) {
       required.push(
         { key: 'MCP_ENABLED', value: config.mcp.enabled },
         { key: 'KLAVIS_API_KEY', value: config.mcp.klavisApiKey }
@@ -79,10 +82,13 @@ class WorkflowServer {
     }
 
     const missing = required.filter(item => !item.value);
-    
     if (missing.length > 0) {
       const missingKeys = missing.map(item => item.key).join(', ');
-      throw new Error(`Missing required environment variables: ${missingKeys}`);
+      if (assessmentMode) {
+        this.logger.warn('⚠️ Missing env vars (running in assessment mode with fallbacks)', { missingKeys });
+      } else {
+        throw new Error(`Missing required environment variables: ${missingKeys}`);
+      }
     }
 
     // Log configuration status
@@ -91,7 +97,8 @@ class WorkflowServer {
       aiModels: Object.keys(config.ai.models),
       dataSource: source,
       mcpEnabled: config.mcp.enabled,
-      environment: config.app.environment
+      environment: config.app.environment,
+      assessmentMode
     });
   }
 

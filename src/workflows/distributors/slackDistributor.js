@@ -1,11 +1,13 @@
 import { WebClient } from '@slack/web-api';
 import { Logger } from '../../utils/logger.js';
+import { getRedisService } from '../../services/redisService.js';
 
 export class SlackDistributor {
   constructor(config) {
     this.config = config;
     this.logger = new Logger(config);
     this.slack = null;
+    this.redis = getRedisService(config);
   }
 
   async initialize() {
@@ -71,8 +73,28 @@ export class SlackDistributor {
         targetChannels = channels;
       }
 
+      // Idempotency: avoid duplicate sends for same plan+channel
+      const dedupeKeyBase = `${accountName}:${accountPlan?.metadata?.generatedDate || ''}`;
+      const sentSet = new Set();
+
       // Send to each configured/target channel
       for (const channelConfig of targetChannels) {
+        const dedupeKey = `${dedupeKeyBase}:${channelConfig.channel}`;
+        if (sentSet.has(dedupeKey)) continue;
+        // Redis-based idempotency (24h TTL)
+        const redisKey = `${process.env.JOB_QUEUE_PREFIX || 'ai-account-planner'}:dedupe:slack:${dedupeKey}`;
+        let skip = false;
+        try {
+          if (this.redis && this.redis.isConnected()) {
+            const exists = await this.redis.redis.get(redisKey);
+            if (exists) skip = true; else await this.redis.redis.setex(redisKey, 86400, '1');
+          }
+        } catch (_) {}
+        if (skip) {
+          this.logger.info('⏭️ Skipping duplicate Slack post', { channel: channelConfig.channel, accountName });
+          continue;
+        }
+
         const result = await this.sendToChannel(
           channelConfig,
           accountPlan,
@@ -81,6 +103,7 @@ export class SlackDistributor {
           context
         );
         results.push(result);
+        if (result.status === 'sent') sentSet.add(dedupeKey);
       }
 
       return {

@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AccountPlan",
+  "type": "object",
+  "required": ["metadata", "executiveSummary", "accountOverview", "opportunityAnalysis", "stakeholderMap", "strategicRecommendations", "riskAssessment", "actionPlan", "dataInsights"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["accountName", "generatedDate"],
+      "properties": {
+        "accountName": {"type": "string"},
+        "generatedDate": {"type": "string"}
+      }
+    },
+    "executiveSummary": {
+      "type": "object",
+      "required": ["overview", "keyHighlights", "recommendation"],
+      "properties": {
+        "overview": {"type": "string"},
+        "keyHighlights": {"type": "array", "items": {"type": "string"}},
+        "recommendation": {"type": "string"}
+      }
+    },
+    "accountOverview": {"type": "object"},
+    "opportunityAnalysis": {"type": "object"},
+    "stakeholderMap": {"type": "object"},
+    "strategicRecommendations": {"type": "object"},
+    "riskAssessment": {"type": "object"},
+    "actionPlan": {"type": "object"},
+    "dataInsights": {"type": "object"}
+  }
+}
+
