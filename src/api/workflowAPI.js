@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { WorkflowOrchestrator } from '../workflows/workflowOrchestrator.js';
+import { MixedAIService } from '../ai/services/mixedAIService.js';
 import { createDemoAPI } from './demoAPI.js';
 import { createGraphAPI } from './graphAPI.js';
 import { createAuthAPI } from './authAPI.js';
@@ -82,9 +83,14 @@ export class WorkflowAPI {
   }
 
   setupRoutes() {
-    // Health check
-    // Dashboard route (main interface)
+    // Homepage: Settings + Chatbot
     this.app.get('/', (req, res) => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      res.sendFile(join(__dirname, '../../public/settings.html'));
+    });
+    // Keep dashboard accessible at /dashboard
+    this.app.get('/dashboard', (req, res) => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
       res.sendFile(join(__dirname, '../../public/dashboard.html'));
@@ -195,6 +201,30 @@ export class WorkflowAPI {
 
     // Settings API (UI configuration, prompts, scheduling preferences)
     this.app.use('/settings', createSettingsAPI(this.orchestrator, this.config));
+    // Simple chat endpoint backed by configured LLMs
+    this.app.post('/settings/chat', async (req, res) => {
+      try {
+        const { messages = [], system, provider, modelName, useTools } = req.body || {};
+        const configOverride = { ...this.config, ai: { ...this.config.ai } };
+        if (provider && ['openai', 'anthropic', 'mixed'].includes(provider)) {
+          configOverride.ai.provider = provider;
+        }
+        const ai = new MixedAIService(configOverride, this.orchestrator?.dataManager?.getKlavisProvider?.() || null);
+        // Compose prompt from chat messages
+        const text = messages.map(m => `${m.role || 'user'}: ${m.content || ''}`).join('\n');
+        const opts = { systemOverride: system || this.config.ai.systemPrompt, temperature: this.config.ai.temperature, max_tokens: this.config.ai.maxTokens };
+        let content;
+        if (useTools) {
+          content = await ai.generateCompletionWithTools(text, modelName || (configOverride.ai.provider === 'openai' ? configOverride.ai.models.opportunities : configOverride.ai.models.health), opts);
+        } else {
+          content = await ai.generateCompletion(text, modelName || (configOverride.ai.provider === 'openai' ? configOverride.ai.models.opportunities : configOverride.ai.models.health), opts);
+        }
+        res.json({ ok: true, reply: content });
+      } catch (err) {
+        this.logger.error('Chat error', { error: err.message });
+        res.status(500).json({ ok: false, error: err.message });
+      }
+    });
 
     // robots.txt (avoid 404 noise in browsers/crawlers)
     this.app.get('/robots.txt', (_req, res) => {

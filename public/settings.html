@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings & Chat</title>
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #f7f7fb; }
+      .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+      h1 { margin: 0 0 8px; }
+      .card { background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.06); padding: 18px; margin: 16px 0; }
+      label { display:block; font-weight:600; margin: 8px 0 6px; }
+      input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d8d8e0; border-radius: 8px; font-size: 14px; }
+      textarea { min-height: 100px; resize: vertical; }
+      button { background:#5b6bff; border:0; border-radius:8px; color:#fff; padding:11px 16px; font-weight:600; cursor:pointer; }
+      .row { display:flex; gap:12px; }
+      .row > div { flex:1; }
+      .chat-box { height: 300px; overflow:auto; background:#0d1117; color:#c9d1d9; border-radius:8px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .msg-user { color:#7ee787; }
+      .msg-assistant { color:#9ccaff; }
+      .small { color:#666; font-size: 12px; }
+      .actions { display:flex; gap:8px; margin-top:8px; }
+      .linkbar a { color:#5b6bff; margin-right: 12px; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Settings & Chat</h1>
+      <div class="small linkbar">
+        <a href="/dataset">Dataset</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/instructor">Plan Generator</a>
+      </div>
+
+      <div class="card">
+        <h3>AI Chatbot</h3>
+        <div class="row">
+          <div>
+            <label>Provider</label>
+            <select id="provider">
+              <option value="mixed">mixed</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+            </select>
+          </div>
+          <div>
+            <label>Model (optional)</label>
+            <input id="model" placeholder="leave empty for defaults" />
+          </div>
+          <div>
+            <label>Use Tools</label>
+            <select id="tools"><option value="false">No</option><option value="true">Yes</option></select>
+          </div>
+        </div>
+        <label>System Prompt (optional)</label>
+        <textarea id="system" placeholder="Instruct the assistant's behavior..."></textarea>
+        <div class="chat-box" id="chat"></div>
+        <div class="row">
+          <div style="flex:1">
+            <input id="input" placeholder="Type a message and press Send..." />
+          </div>
+          <div style="width:140px"><button id="send">Send</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Demo: Generate and Distribute Account Plan</h3>
+        <div class="row">
+          <div>
+            <label>Account Name</label>
+            <input id="demo_account" placeholder="e.g., contoso" />
+          </div>
+          <div>
+            <label>Provider</label>
+            <select id="demo_provider">
+              <option value="mixed">mixed</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+            </select>
+          </div>
+          <div>
+            <label>Model (optional)</label>
+            <input id="demo_model" placeholder="leave empty for defaults" />
+          </div>
+        </div>
+        <label>Agent Instructor Directives</label>
+        <textarea id="demo_instructions" placeholder="Explain how the plan should be framed (tone, priorities, constraints)..."></textarea>
+
+        <div class="row">
+          <div>
+            <label>Slack</label>
+            <div class="row">
+              <div style="max-width:90px"><input type="checkbox" id="slack_enable" /> Enable</div>
+              <div><input id="slack_channel" placeholder="#account-planning" /></div>
+              <div>
+                <select id="slack_format">
+                  <option value="summary">summary</option>
+                  <option value="detailed">detailed</option>
+                  <option value="alert">alert</option>
+                  <option value="dealflow">dealflow</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label>Email</label>
+            <div class="row">
+              <div style="max-width:90px"><input type="checkbox" id="email_enable" /> Enable</div>
+              <div><input id="email_recipients" placeholder="demo@example.com, team@example.com" /></div>
+              <div>
+                <select id="email_template">
+                  <option value="executive">executive</option>
+                  <option value="summary">summary</option>
+                  <option value="detailed">detailed</option>
+                </select>
+              </div>
+            </div>
+            <input id="email_subject" placeholder="Subject (optional)" />
+          </div>
+          <div>
+            <label>CRM</label>
+            <div class="row">
+              <div style="max-width:90px"><input type="checkbox" id="crm_enable" /> Enable</div>
+              <div style="flex:1">
+                <div class="small">Actions</div>
+                <div>
+                  <label><input type="checkbox" class="crm_action" value="updateAccount" checked /> updateAccount</label>
+                  <label><input type="checkbox" class="crm_action" value="createTasks" /> createTasks</label>
+                  <label><input type="checkbox" class="crm_action" value="updateOpportunities" /> updateOpportunities</label>
+                  <label><input type="checkbox" class="crm_action" value="logActivity" /> logActivity</label>
+                  <label><input type="checkbox" class="crm_action" value="createNotes" /> createNotes</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="demo_generate">Generate Plan (Preview)</button>
+          <button id="demo_distribute">Generate + Distribute</button>
+        </div>
+        <div class="row">
+          <div class="card" style="flex:1">
+            <div style="font-weight:600;margin-bottom:6px">Plan Preview</div>
+            <div class="chat-box" id="demo_plan" style="height:260px"></div>
+          </div>
+          <div class="card" style="flex:1">
+            <div style="font-weight:600;margin-bottom:6px">Distribution Results</div>
+            <div class="chat-box" id="demo_dist" style="height:260px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Basic Settings</h3>
+        <div class="row">
+          <div><label>AI Provider</label><input id="s_provider" /></div>
+          <div><label>Health Model</label><input id="s_hmodel" /></div>
+          <div><label>Opportunities Model</label><input id="s_omodel" /></div>
+        </div>
+        <div class="actions">
+          <button id="load">Load Settings</button>
+          <button id="save">Save Settings</button>
+          <button id="apply">Apply & Reload</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const el = id => document.getElementById(id);
+      const chat = [];
+      function add(role, content) {
+        chat.push({ role, content });
+        const box = el('chat');
+        const cls = role === 'user' ? 'msg-user' : 'msg-assistant';
+        const line = document.createElement('div');
+        line.className = cls;
+        line.textContent = role + ': ' + content;
+        box.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+      }
+      async function send() {
+        const text = el('input').value.trim();
+        if (!text) return;
+        el('input').value = '';
+        add('user', text);
+        const body = {
+          messages: chat,
+          system: el('system').value.trim() || undefined,
+          provider: el('provider').value,
+          modelName: el('model').value.trim() || undefined,
+          useTools: el('tools').value === 'true'
+        };
+        const res = await fetch('/settings/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await res.json();
+        add('assistant', j.reply || ('[error] ' + (j.error || 'unknown')));
+      }
+      el('send').onclick = send;
+      el('input').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+
+      async function loadSettings() {
+        const res = await fetch('/settings');
+        const j = await res.json();
+        const s = j.settings || {};
+        el('s_provider').value = (s.ai && s.ai.provider) || '';
+        el('s_hmodel').value = (s.ai && s.ai.models && s.ai.models.health) || '';
+        el('s_omodel').value = (s.ai && s.ai.models && s.ai.models.opportunities) || '';
+      }
+      async function saveSettings() {
+        const payload = {
+          ai: {
+            provider: el('s_provider').value || undefined,
+            models: {
+              health: el('s_hmodel').value || undefined,
+              opportunities: el('s_omodel').value || undefined
+            }
+          }
+        };
+        const res = await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const j = await res.json();
+        if (!j.success) alert('Failed to save settings: ' + (j.error||'unknown'));
+        else alert('Settings saved. Click Apply & Reload to take effect.');
+      }
+      async function applySettings() {
+        const res = await fetch('/settings/reload', { method: 'POST' });
+        const j = await res.json();
+        if (!j.success) alert('Failed to apply settings: ' + (j.error||'unknown'));
+        else alert('Settings applied and services reloaded.');
+      }
+      el('load').onclick = loadSettings;
+      el('save').onclick = saveSettings;
+      el('apply').onclick = applySettings;
+      loadSettings();
+
+      // DEMO GENERATOR
+      function distributorsFromUI() {
+        const arr = [];
+        if (el('slack_enable').checked) {
+          const channel = el('slack_channel').value.trim() || '#account-planning';
+          const format = el('slack_format').value || 'summary';
+          arr.push({ type: 'slack', config: { channels: [{ channel }], format } });
+        }
+        if (el('email_enable').checked) {
+          const recs = (el('email_recipients').value || '').split(',').map(s => s.trim()).filter(Boolean).map(email => ({ email }));
+          arr.push({ type: 'email', config: { recipients: recs.length ? recs : [{ email: 'demo@example.com' }], template: el('email_template').value || 'executive', subject: el('email_subject').value || undefined } });
+        }
+        if (el('crm_enable').checked) {
+          const actions = Array.from(document.querySelectorAll('.crm_action:checked')).map(x => x.value);
+          arr.push({ type: 'crm', config: { actions: actions.length ? actions : ['updateAccount'] } });
+        }
+        return arr;
+      }
+
+      async function runDemo(distribute) {
+        const accountName = el('demo_account').value.trim() || 'stripe';
+        const instructions = el('demo_instructions').value.trim() || 'Be concise and executive-ready.';
+        const provider = el('demo_provider').value;
+        const modelName = (el('demo_model').value || '').trim() || undefined;
+        const distributors = distribute ? distributorsFromUI() : [];
+        const body = { accountName, instructions, provider, modelName, distributors };
+        const res = await fetch('/instructor/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await res.json();
+        el('demo_plan').textContent = JSON.stringify(j.plan || j, null, 2);
+        if (distribute) el('demo_dist').textContent = JSON.stringify(j.distributionResults || {}, null, 2);
+      }
+      el('demo_generate').onclick = () => runDemo(false);
+      el('demo_distribute').onclick = () => runDemo(true);
+    </script>
+  </body>
+  </html>

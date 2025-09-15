@@ -518,7 +518,7 @@ class Dashboard {
             const data = await res.json();
             if (!data.success) throw new Error(data.error || 'Failed to save People.ai settings');
             this.hidePeopleAIModal();
-            alert('Saved People.ai preview settings. (No live connection — UI only)');
+            alert('Saved People.ai demo configuration. (UI-only; no live connection)');
         } catch (err) {
             alert(`Failed to save People.ai settings: ${err.message}`);
         } finally {
