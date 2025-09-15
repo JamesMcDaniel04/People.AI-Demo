@@ -1,5 +1,6 @@
 import express from 'express';
 import { MixedAIService } from '../ai/services/mixedAIService.js';
+import { metrics } from '../services/metricsService.js';
 
 export function createInstructorAPI(orchestrator, baseConfig) {
   const router = express.Router();
@@ -18,6 +19,7 @@ export function createInstructorAPI(orchestrator, baseConfig) {
     }
 
     try {
+      const timer = metrics.time('instructor:run');
       // Gather account data (sample/MCP/external based on config)
       const dataManager = orchestrator.dataManager;
       const accountData = await dataManager.getAccountData(accountName);
@@ -84,7 +86,7 @@ Account Information:\n${JSON.stringify(accountData.basic?.data || {}, null, 2)}\
         // Non-fatal: continue without schema block
       }
 
-      // Attach minimal citations (grounding)
+      // Attach minimal citations (grounding) and sanitize existing sources
       try {
         const emails = (accountData.emails?.[0]?.data || accountData.emails || []).map(e => e.thread_id || e.id).filter(Boolean);
         const calls = (accountData.calls?.[0]?.data || accountData.calls || []).map(c => c.call_id || c.id).filter(Boolean);
@@ -94,14 +96,15 @@ Account Information:\n${JSON.stringify(accountData.basic?.data || {}, null, 2)}\
           if (calls[0]) arr.push({ type: 'call', id: calls[0] });
           return arr;
         };
+        const filterSources = (arr) => (arr || []).filter(s => (s.type === 'email' && emails.includes(s.id)) || (s.type === 'call' && calls.includes(s.id)));
         if (Array.isArray(plan?.dataInsights?.keyInsights)) {
-          plan.dataInsights.keyInsights = plan.dataInsights.keyInsights.map(ins => ({ ...ins, sources: ins.sources || cite() }));
+          plan.dataInsights.keyInsights = plan.dataInsights.keyInsights.map(ins => ({ ...ins, sources: filterSources(ins.sources) || cite() }));
         }
         if (Array.isArray(plan?.opportunityAnalysis?.identifiedOpportunities)) {
-          plan.opportunityAnalysis.identifiedOpportunities = plan.opportunityAnalysis.identifiedOpportunities.map(o => ({ ...o, sources: o.sources || cite() }));
+          plan.opportunityAnalysis.identifiedOpportunities = plan.opportunityAnalysis.identifiedOpportunities.map(o => ({ ...o, sources: filterSources(o.sources) || cite() }));
         }
         if (Array.isArray(plan?.riskAssessment?.identifiedRisks)) {
-          plan.riskAssessment.identifiedRisks = plan.riskAssessment.identifiedRisks.map(r => ({ ...r, sources: r.sources || cite() }));
+          plan.riskAssessment.identifiedRisks = plan.riskAssessment.identifiedRisks.map(r => ({ ...r, sources: filterSources(r.sources) || cite() }));
         }
       } catch (_) {}
 
@@ -116,9 +119,11 @@ Account Information:\n${JSON.stringify(accountData.basic?.data || {}, null, 2)}\
         };
         distributionResults = await orchestrator.distributeAccountPlan(plan, distributors, accountName, context.executionId);
       }
-
+      metrics.inc('plan_generated');
+      timer.finish(true);
       res.json({ status: 'success', accountName, plan, distributionResults });
     } catch (error) {
+      metrics.inc('instructor:run:err');
       res.status(500).json({ error: 'Instructor run failed', message: error.message });
     }
   });

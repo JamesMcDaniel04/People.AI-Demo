@@ -34,6 +34,10 @@
         </div>
       </div>
       <div class="card">
+        <div style="font-weight:600;margin-bottom:8px">Recent Distribution Status</div>
+        <pre id="dist"></pre>
+      </div>
+      <div class="card">
         <div id="log"></div>
       </div>
     </div>
@@ -52,16 +56,22 @@
           <div>External News: <b>${c.external||0}</b></div>
         `;
       }
-      el('load').onclick = summary;
+      async function dist() {
+        const res = await fetch('/status/distribution');
+        const j = await res.json();
+        el('dist').textContent = JSON.stringify(j.recent || {}, null, 2);
+      }
+      el('load').onclick = async () => { await summary(); await dist(); };
       el('sync').onclick = async () => {
         const a = el('account').value.trim() || 'stripe';
         const res = await fetch(`/external/sync`, { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ accountName: a }) });
         const j = await res.json();
         el('log').textContent = JSON.stringify(j, null, 2);
         await summary();
+        await dist();
       };
       summary();
+      dist();
     </script>
   </body>
   </html>
-

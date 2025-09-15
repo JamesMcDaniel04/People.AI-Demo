@@ -89,6 +89,11 @@ export class WorkflowAPI {
       const __dirname = dirname(__filename);
       res.sendFile(join(__dirname, '../../public/dashboard.html'));
     });
+    this.app.get('/dataset', (req, res) => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      res.sendFile(join(__dirname, '../../public/dataset.html'));
+    });
 
     // Simple ping
     this.app.get('/__ping', (_req, res) => res.type('text/plain').send('pong'));
@@ -131,6 +136,7 @@ export class WorkflowAPI {
     this.app.get('/integration/status', this.getIntegrationStatus.bind(this));
     this.app.post('/external/sync', this.syncExternal.bind(this));
     this.app.get('/data/:account/summary', this.getDataSummary.bind(this));
+    this.app.get('/status/distribution', this.getDistributionStatus.bind(this));
 
     // Minimal Klavis OAuth (demo stub)
     this.app.get('/auth/klavis/start', this.startKlavisAuth.bind(this));
@@ -770,6 +776,17 @@ export class WorkflowAPI {
       res.json({ status: 'success', accountName, counts: { emails, calls, stakeholders, interactions, external } });
     } catch (error) {
       this.logger.error('Failed to get data summary', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async getDistributionStatus(req, res) {
+    try {
+      const { statusService } = await import('../services/statusService.js');
+      const recent = statusService.getAll(20);
+      res.json({ status: 'success', recent });
+    } catch (error) {
+      this.logger.error('Failed to get distribution status', { error: error.message });
       res.status(500).json({ status: 'error', message: error.message });
     }
   }

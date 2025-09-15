@@ -21,13 +21,75 @@
         "recommendation": {"type": "string"}
       }
     },
-    "accountOverview": {"type": "object"},
-    "opportunityAnalysis": {"type": "object"},
-    "stakeholderMap": {"type": "object"},
-    "strategicRecommendations": {"type": "object"},
-    "riskAssessment": {"type": "object"},
-    "actionPlan": {"type": "object"},
-    "dataInsights": {"type": "object"}
+    "accountOverview": {
+      "type": "object",
+      "required": ["currentStatus", "healthScore", "keyMetrics", "relationshipHealth"],
+      "properties": {
+        "currentStatus": {"type": "object"},
+        "healthScore": {"type": "object"},
+        "keyMetrics": {"type": "object"},
+        "relationshipHealth": {"type": "string"}
+      }
+    },
+    "opportunityAnalysis": {
+      "type": "object",
+      "required": ["identifiedOpportunities", "potentialValue"],
+      "properties": {
+        "identifiedOpportunities": {"type": "array", "items": {"type": "object"}},
+        "potentialValue": {"type": "number"},
+        "prioritization": {"type": "array"},
+        "timeframe": {"type": "object"}
+      }
+    },
+    "stakeholderMap": {
+      "type": "object",
+      "required": ["keyRelationships"],
+      "properties": {
+        "visualization": {"type": "object"},
+        "keyRelationships": {"type": "array", "items": {"type": "object"}},
+        "engagementStrategy": {"type": "object"},
+        "riskAssessment": {"type": "object"}
+      }
+    },
+    "strategicRecommendations": {
+      "type": "object",
+      "required": ["immediate", "shortTerm", "longTerm", "resourceRequirements"],
+      "properties": {
+        "immediate": {"type": "array"},
+        "shortTerm": {"type": "array"},
+        "longTerm": {"type": "array"},
+        "resourceRequirements": {"type": "array"}
+      }
+    },
+    "riskAssessment": {
+      "type": "object",
+      "required": ["identifiedRisks"],
+      "properties": {
+        "identifiedRisks": {"type": "array", "items": {"type": "object"}},
+        "mitigationStrategies": {"type": "array"},
+        "contingencyPlans": {"type": "array"},
+        "monitoringPlan": {"type": "object"}
+      }
+    },
+    "actionPlan": {
+      "type": "object",
+      "required": ["nextSteps"],
+      "properties": {
+        "nextSteps": {"type": "array"},
+        "timeline": {"type": "object"},
+        "successMetrics": {"type": "object"},
+        "reviewSchedule": {"type": "object"}
+      }
+    },
+    "dataInsights": {
+      "type": "object",
+      "required": ["keyInsights"],
+      "properties": {
+        "keyInsights": {"type": "array", "items": {"type": "object"}},
+        "trends": {"type": "object"},
+        "dataQuality": {"type": "object"},
+        "recommendations": {"type": "array"}
+      }
+    }
   }
 }
-

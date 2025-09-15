@@ -28,39 +28,58 @@ export class MixedAIService {
   }
 
   async generateCompletion(prompt, modelName, options = {}) {
-    const isClaudeModel = modelName.startsWith('claude');
-    
+    const isClaudeModel = modelName && modelName.startsWith('claude');
+    const primary = isClaudeModel ? 'anthropic' : 'openai';
+    const secondary = isClaudeModel ? 'openai' : 'anthropic';
+
     try {
-      if (isClaudeModel) {
-        return await this.generateClaudeCompletion(prompt, modelName, options);
-      } else {
-        return await this.generateOpenAICompletion(prompt, modelName, options);
-      }
+      return isClaudeModel
+        ? await this.generateClaudeCompletion(prompt, modelName, options)
+        : await this.generateOpenAICompletion(prompt, modelName, options);
     } catch (error) {
-      console.error(`AI API Error (${modelName}):`, error.message);
-      throw error;
+      console.warn(`Primary provider failed (${primary}:${modelName}). Falling back to ${secondary}.`, error.message);
+      try {
+        if (isClaudeModel) {
+          const fallbackModel = this.models.opportunities || 'gpt-4o';
+          return await this.generateOpenAICompletion(prompt, fallbackModel, options);
+        } else {
+          const fallbackModel = this.models.health || 'claude-3-5-sonnet-20241022';
+          return await this.generateClaudeCompletion(prompt, fallbackModel, options);
+        }
+      } catch (e2) {
+        console.error('AI fallback failed:', e2.message);
+        throw error; // surface original
+      }
     }
   }
 
   // Enhanced completion with tool calling support
   async generateCompletionWithTools(prompt, modelName, options = {}) {
-    const isClaudeModel = modelName.startsWith('claude');
-    
+    const isClaudeModel = modelName && modelName.startsWith('claude');
+
     if (!this.toolsEnabled) {
       console.warn('Tools not available, falling back to standard completion');
       return await this.generateCompletion(prompt, modelName, options);
     }
 
     try {
-      if (isClaudeModel) {
-        return await this.generateClaudeCompletionWithTools(prompt, modelName, options);
-      } else {
-        return await this.generateOpenAICompletionWithTools(prompt, modelName, options);
-      }
+      return isClaudeModel
+        ? await this.generateClaudeCompletionWithTools(prompt, modelName, options)
+        : await this.generateOpenAICompletionWithTools(prompt, modelName, options);
     } catch (error) {
-      console.error(`AI API Error with tools (${modelName}):`, error.message);
-      // Fallback to standard completion
-      return await this.generateCompletion(prompt, modelName, options);
+      console.warn(`Primary tool-call failed (${isClaudeModel ? 'anthropic' : 'openai'}:${modelName}). Trying cross-provider.`);
+      try {
+        if (isClaudeModel) {
+          const fallbackModel = this.models.opportunities || 'gpt-4o';
+          return await this.generateOpenAICompletionWithTools(prompt, fallbackModel, options);
+        } else {
+          const fallbackModel = this.models.health || 'claude-3-5-sonnet-20241022';
+          return await this.generateClaudeCompletionWithTools(prompt, fallbackModel, options);
+        }
+      } catch (e2) {
+        console.warn('Cross-provider tool-call failed. Falling back to standard completion.');
+        return await this.generateCompletion(prompt, modelName, options);
+      }
     }
   }
 

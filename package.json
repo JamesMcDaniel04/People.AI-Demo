@@ -25,6 +25,7 @@
     "validate": "npm run typecheck && npm run lint && npm test",
     "validate:data": "node scripts/validate-data.js",
     "validate:plan": "node scripts/validate-plan.js",
+    "validate:citations": "node scripts/validate-citations.js",
     "deploy": "npm run validate && npm run start:prod",
     "graphrag:start": "./scripts/start-graphrag.sh",
     "graphrag:stop": "docker-compose down",

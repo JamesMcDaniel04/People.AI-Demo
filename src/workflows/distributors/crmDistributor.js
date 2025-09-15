@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { Logger } from '../../utils/logger.js';
+import { getRedisService } from '../../services/redisService.js';
+import { statusService } from '../../services/statusService.js';
 
 export class CRMDistributor {
   constructor(config) {
@@ -7,6 +9,7 @@ export class CRMDistributor {
     this.logger = new Logger(config);
     this.crmClient = null;
     this.crmType = process.env.CRM_TYPE || 'salesforce'; // salesforce, hubspot, pipedrive
+    this.redis = getRedisService(config);
   }
 
   async initialize() {
@@ -130,6 +133,7 @@ export class CRMDistributor {
         crmType: this.crmType,
         error: error.message
       });
+      try { const { metrics } = await import('../../services/metricsService.js'); metrics.inc('crm_distribute:err'); } catch (_) {}
       throw error;
     }
   }
@@ -218,7 +222,7 @@ export class CRMDistributor {
         crmType: this.crmType
       });
 
-      return {
+      const ok = {
         action: 'updateAccount',
         status: 'success',
         accountId,
@@ -226,6 +230,8 @@ export class CRMDistributor {
         result,
         updatedAt: new Date().toISOString()
       };
+      statusService.record('crm', { account: accountName, action: 'updateAccount', ok: true });
+      return ok;
     } else {
       // Mock mode
       this.logger.info('🔄 Account record updated (mock mode)', {
@@ -233,7 +239,7 @@ export class CRMDistributor {
         updateData
       });
 
-      return {
+      const ok = {
         action: 'updateAccount',
         status: 'success',
         accountId: `mock-${accountName}`,
@@ -241,6 +247,8 @@ export class CRMDistributor {
         updatedAt: new Date().toISOString(),
         mode: 'mock'
       };
+      statusService.record('crm', { account: accountName, action: 'updateAccount', ok: true, mode: 'mock' });
+      return ok;
     }
   }
 
@@ -279,13 +287,15 @@ export class CRMDistributor {
         crmType: this.crmType
       });
 
-      return {
+      const ok = {
         action: 'createTasks',
         status: 'success',
         createdTasks,
         taskCount: createdTasks.length,
         createdAt: new Date().toISOString()
       };
+      statusService.record('crm', { account: accountName, action: 'createTasks', ok: true, count: (createdTasks||[]).length });
+      return ok;
     } else {
       // Mock mode
       this.logger.info('📋 Tasks created (mock mode)', {
@@ -293,7 +303,7 @@ export class CRMDistributor {
         tasks: tasks.map(t => t.subject)
       });
 
-      return {
+      const ok = {
         action: 'createTasks',
         status: 'success',
         tasks: tasks.map(t => ({ ...t, id: `mock-task-${Date.now()}` })),
@@ -301,6 +311,8 @@ export class CRMDistributor {
         createdAt: new Date().toISOString(),
         mode: 'mock'
       };
+      statusService.record('crm', { account: accountName, action: 'createTasks', ok: true, count: tasks.length, mode: 'mock' });
+      return ok;
     }
   }
 

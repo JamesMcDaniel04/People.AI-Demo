@@ -1,6 +1,7 @@
 import { WebClient } from '@slack/web-api';
 import { Logger } from '../../utils/logger.js';
 import { getRedisService } from '../../services/redisService.js';
+import { statusService } from '../../services/statusService.js';
 
 export class SlackDistributor {
   constructor(config) {
@@ -117,6 +118,7 @@ export class SlackDistributor {
         accountName,
         error: error.message
       });
+      try { const { metrics } = await import('../../services/metricsService.js'); metrics.inc('slack_distribute:err'); } catch (_) {}
       throw error;
     }
   }
@@ -174,12 +176,14 @@ export class SlackDistributor {
         accountName
       });
 
-      return {
+      const fail = {
         channel,
         status: 'failed',
         error: error.message,
         failedAt: new Date().toISOString()
       };
+      statusService.record('slack', { account: context.accountName, channel, ok: false, error: error.message });
+      return fail;
     }
   }
 

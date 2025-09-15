@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Logger } from '../../utils/logger.js';
 import { getRedisService } from '../../services/redisService.js';
+import { statusService } from '../../services/statusService.js';
 
 export class EmailDistributor {
   constructor(config) {
@@ -108,6 +109,7 @@ export class EmailDistributor {
         accountName,
         error: error.message
       });
+      try { const { metrics } = await import('../../services/metricsService.js'); metrics.inc('email_distribute:err'); } catch (_) {}
       throw error;
     }
   }
@@ -124,13 +126,15 @@ export class EmailDistributor {
           accountName
         });
 
-        return {
+        const ok = {
           recipient: recipient.email,
           status: 'sent',
           messageId: `mock-${Date.now()}`,
           sentAt: new Date().toISOString(),
           mode: 'mock'
         };
+        statusService.record('email', { account: accountName, recipient: recipient.email, ok: true });
+        return ok;
       }
 
       // Use Postmark HTTP API
@@ -165,13 +169,15 @@ export class EmailDistributor {
         executionId
       });
 
-      return {
+      const ok = {
         recipient: recipient.email,
         status: 'sent',
         messageId: response.data.MessageID,
         sentAt: new Date().toISOString(),
         provider: 'Postmark'
       };
+      statusService.record('email', { account: accountName, recipient: recipient.email, ok: true });
+      return ok;
 
     } catch (error) {
       this.logger.error('❌ Failed to send email via Postmark', {
@@ -182,13 +188,15 @@ export class EmailDistributor {
         accountName
       });
 
-      return {
+      const fail = {
         recipient: recipient.email,
         status: 'failed',
         error: error.response?.data?.Message || error.message,
         errorCode: error.response?.data?.ErrorCode,
         failedAt: new Date().toISOString()
       };
+      statusService.record('email', { account: accountName, recipient: recipient.email, ok: false, error: error.message });
+      return fail;
     }
   }
 
