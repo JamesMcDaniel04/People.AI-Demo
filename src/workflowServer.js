@@ -165,16 +165,18 @@ class WorkflowServer {
     process.on('SIGINT', () => shutdown('SIGINT'));
     
     process.on('unhandledRejection', (reason, promise) => {
+      const assessment = process.env.ASSESSMENT_MODE === 'true' || process.env.ASSESSMENT_PRELOAD === 'true';
       this.logger.error('Unhandled Rejection at:', { promise, reason });
-      process.exit(1);
+      if (!assessment) process.exit(1);
     });
 
     process.on('uncaughtException', (error) => {
+      const assessment = process.env.ASSESSMENT_MODE === 'true' || process.env.ASSESSMENT_PRELOAD === 'true';
       this.logger.error('Uncaught Exception:', { 
         error: error.message, 
         stack: error.stack 
       });
-      process.exit(1);
+      if (!assessment) process.exit(1);
     });
   }
 

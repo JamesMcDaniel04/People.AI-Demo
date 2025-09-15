@@ -53,17 +53,32 @@ export class WorkflowOrchestrator {
       // Initialize account planner
       this.accountPlanner = new AccountPlannerApp(this.dataManager, this.config);
       
-      // Initialize Supabase service for authentication and user management
-      this.supabaseService = new SupabaseService(this.config);
-      await this.supabaseService.initialize();
+      // Initialize Supabase service for authentication and user management (graceful)
+      try {
+        this.supabaseService = new SupabaseService(this.config);
+        await this.supabaseService.initialize();
+      } catch (e) {
+        this.logger.warn('⚠️ Supabase init failed, continuing without auth', { error: e.message });
+        this.supabaseService = null;
+      }
       
-      // Initialize PostgreSQL service
-      this.postgresService = new PostgresService(this.config);
-      await this.postgresService.initialize();
+      // Initialize PostgreSQL service (graceful)
+      try {
+        this.postgresService = new PostgresService(this.config);
+        await this.postgresService.initialize();
+      } catch (e) {
+        this.logger.warn('⚠️ Postgres init failed, disabling graph service', { error: e.message });
+        this.postgresService = null;
+      }
       
-      // Initialize graph service for Neo4j knowledge graph (with PostgreSQL integration)
-      this.graphService = new GraphService(this.config, this.postgresService);
-      await this.graphService.initialize();
+      // Initialize graph service for Neo4j knowledge graph (graceful)
+      try {
+        this.graphService = new GraphService(this.config, this.postgresService);
+        await this.graphService.initialize();
+      } catch (e) {
+        this.logger.warn('⚠️ Graph service init failed, continuing without Neo4j', { error: e.message });
+        this.graphService = null;
+      }
       
       // Initialize all distributors
       await Promise.all([

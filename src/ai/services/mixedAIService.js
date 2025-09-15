@@ -28,6 +28,9 @@ export class MixedAIService {
   }
 
   async generateCompletion(prompt, modelName, options = {}) {
+    if (process.env.SIMULATE_AI_401 === 'true') {
+      throw new Error('Simulated AI 401: primary provider auth failed');
+    }
     const isClaudeModel = modelName && modelName.startsWith('claude');
     const primary = isClaudeModel ? 'anthropic' : 'openai';
     const secondary = isClaudeModel ? 'openai' : 'anthropic';
@@ -55,6 +58,9 @@ export class MixedAIService {
 
   // Enhanced completion with tool calling support
   async generateCompletionWithTools(prompt, modelName, options = {}) {
+    if (process.env.SIMULATE_AI_401 === 'true') {
+      throw new Error('Simulated AI 401: primary provider auth failed');
+    }
     const isClaudeModel = modelName && modelName.startsWith('claude');
 
     if (!this.toolsEnabled) {

@@ -116,6 +116,30 @@ export class WorkflowAPI {
       res.json(metrics.snapshot());
     });
 
+    // QA metrics evaluation
+    this.app.get('/metrics/qa', (req, res) => {
+      const snap = metrics.snapshot();
+      const p95Threshold = parseInt(process.env.LATENCY_P95_THRESHOLD_MS || '8000');
+      const hardFail = parseInt(process.env.LATENCY_P95_HARD_FAIL_MS || '12000');
+      const keys = [
+        'http:GET:/health',
+        'http:GET:/instructor',
+        'http:POST:/instructor/run'
+      ];
+      const results = {};
+      let pass = true; let hard = false;
+      for (const k of keys) {
+        const t = snap.timings[k] || {};
+        const p95 = t.p95 || 0;
+        const ok = p95 === 0 || p95 <= p95Threshold;
+        const hf = p95 > hardFail;
+        pass = pass && ok;
+        hard = hard || hf;
+        results[k] = { p95, pass: ok, hardFail: hf };
+      }
+      res.json({ pass: pass && !hard, hardFail: hard, thresholdMs: p95Threshold, hardFailMs: hardFail, results });
+    });
+
     // Workflow management routes
     this.app.post('/workflows', this.createWorkflow.bind(this));
     this.app.get('/workflows', this.listWorkflows.bind(this));
@@ -407,6 +431,7 @@ export class WorkflowAPI {
     try {
       const { workflowId } = req.params;
       const context = req.body.context || {};
+      if (req.correlationId) context.correlationId = req.correlationId;
       
       const result = await this.orchestrator.executeWorkflow(workflowId, {
         ...context,
@@ -495,7 +520,8 @@ export class WorkflowAPI {
       // Execute immediately
       const result = await this.orchestrator.executeWorkflow(quickWorkflow.id, {
         triggeredBy: 'quick_action',
-        apiRequest: true
+        apiRequest: true,
+        correlationId: req.correlationId
       });
 
       // Clean up temporary workflow
@@ -530,7 +556,8 @@ export class WorkflowAPI {
         accountName,
         executionId: `quick-${Date.now()}`,
         timestamp: new Date().toISOString(),
-        triggeredBy: 'quick_distribute'
+        triggeredBy: 'quick_distribute',
+        correlationId: req.correlationId
       };
 
       const distributionResults = await this.orchestrator.distributeAccountPlan(

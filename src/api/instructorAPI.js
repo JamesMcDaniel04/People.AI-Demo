@@ -115,7 +115,8 @@ Account Information:\n${JSON.stringify(accountData.basic?.data || {}, null, 2)}\
           accountName,
           executionId: `instructor-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          triggeredBy: 'instructor_api'
+          triggeredBy: 'instructor_api',
+          correlationId: req.headers['x-correlation-id'] || req.correlationId || `corr-${Date.now()}`
         };
         distributionResults = await orchestrator.distributeAccountPlan(plan, distributors, accountName, context.executionId);
       }
