@@ -255,7 +255,8 @@ class DemoInterface {
             this.log('📋 Generating comprehensive account plan...', 'info');
             
             // Make actual API call
-            const executionData = await this.executeWorkflowAPI(config);
+            const apiResp = await this.executeWorkflowAPI(config);
+            const executionData = apiResp.execution || apiResp; // support both shapes
             this.currentExecution = executionData;
             
             this.updateExecutionStep('plan_generation', 'completed');

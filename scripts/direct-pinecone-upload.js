@@ -128,9 +128,9 @@ const stripeAccountData = [
   }
 ];
 
-// Generate mock embedding vectors
+// Generate mock embedding vectors (1024 dimensions for peopleai index)
 function generateEmbedding() {
-  return Array.from({ length: 1536 }, () => Math.random() * 2 - 1);
+  return Array.from({ length: 1024 }, () => Math.random() * 2 - 1);
 }
 
 async function uploadToPinecone() {
@@ -146,7 +146,7 @@ async function uploadToPinecone() {
       apiKey: process.env.PINECONE_API_KEY,
     });
 
-    const indexName = process.env.PINECONE_INDEX_NAME || 'people-ai-demo';
+    const indexName = 'peopleai'; // Use the existing index
     console.log(`🔗 Connecting to index: ${indexName}`);
     const index = pinecone.index(indexName);
 

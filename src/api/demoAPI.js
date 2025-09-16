@@ -5,37 +5,59 @@ export function createDemoAPI(workflowOrchestrator) {
   const router = express.Router();
   const logger = new Logger();
 
-  // Trigger demo workflow for account (mock: returns hardcoded message)
+  // Trigger demo workflow for account (production: run real planning + optional distribution)
   router.post('/demo/:accountName', async (req, res) => {
-    const { accountName } = req.params;
-    logger.info('🎯 Demo workflow (mock) triggered', { accountName });
+    try {
+      const { accountName } = req.params;
+      const { recipients = [], subject, template = 'executive', slackChannel, slackFormat } = req.body || {};
 
-    const mockMessage = `:robot_face: Account Plan: TechFlow Dynamics :bar_chart: Health: 90/100 :large_green_circle:
-**Summary:**
-- Emails, calls, and meeting notes show strong engagement between TechFlow Dynamics and Stripe. Implementation is on track, with Q1 performance exceeding targets (23% conversion improvement, $890K cost savings, international launches in UK/Germany).
-- Key personas: Priya Patel (VP Eng), David Kim (CFO), James Mitchell (CEO), Michael Torres (Product), Lisa Johnson (Finance), Jennifer Wong (CSM, Stripe), Sarah Chen (AE, Stripe), Marcus Rodriguez (SE, Stripe).
-- Recent calls: Executive briefing, QBR, technical deep dives, implementation reviews—all show alignment and momentum.
-**Top 3 Strategic Recommendations:**
-1. Launch Stripe Billing for subscription automation by 2025-09-18
-2. Expand to Australia/Japan by 2025-10-15
-3. Implement Stripe Radar for fraud reduction by 2025-09-25
-**Expansion Opportunities:**
-- Stripe Capital for revenue-based financing
-- Deeper product adoption (Radar, Billing)
-- APAC market entry
-**Risks:**
-- Integration complexity, resource allocation, competitive pressure
-**Next Actions:**
-- Schedule Q2 planning call by 2025-09-13
-- Assign technical lead for APAC launch by 2025-09-20
-- Review fraud metrics post-Radar by 2025-09-30
-:busts_in_silhouette: Owner: @jennifer.wong@stripe.com`;
+      logger.info('🎯 Demo workflow triggered', { accountName });
 
-    console.log('\n===== MOCK ACCOUNT PLAN (HARD-CODED) =====\n');
-    console.log(mockMessage);
-    console.log('\n==========================================\n');
+      // Build ephemeral workflow config
+      const distributors = [];
+      if (Array.isArray(recipients) && recipients.length > 0) {
+        const normalized = recipients.map(r => typeof r === 'string' ? { email: r } : r).filter(r => r && r.email);
+        if (normalized.length > 0) {
+          distributors.push({
+            type: 'email',
+            config: {
+              recipients: normalized,
+              subject: subject || `Account Plan: ${accountName}`,
+              template: template || 'executive'
+            }
+          });
+        }
+      }
+      if (slackChannel) {
+        distributors.push({
+          type: 'slack',
+          config: { channels: [{ channel: slackChannel }], format: slackFormat || 'summary' }
+        });
+      }
 
-    return res.json({ success: true, message: mockMessage, accountName });
+      // Create a temporary workflow, execute, then clean up
+      const wf = workflowOrchestrator.createWorkflow({
+        name: `Quick Plan: ${accountName}`,
+        description: 'One-time account plan generation (Demo API)',
+        trigger: { type: 'manual' },
+        accounts: [{ accountName }],
+        distributors,
+        enabled: true
+      });
+
+      const execution = await workflowOrchestrator.executeWorkflow(wf.id, {
+        triggeredBy: 'demo_api',
+        apiRequest: true
+      });
+
+      // Best-effort cleanup (ignore errors)
+      try { await workflowOrchestrator.deleteWorkflow(wf.id); } catch (_) {}
+
+      return res.json({ success: true, status: 'success', execution });
+    } catch (error) {
+      logger.error('❌ Demo API execution failed', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
   });
 
   // Get demo status

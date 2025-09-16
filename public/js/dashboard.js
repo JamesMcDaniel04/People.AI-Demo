@@ -23,8 +23,9 @@ class Dashboard {
             button.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
         });
 
-        // Demo account plan generation
-        document.getElementById('generatePlanBtn').addEventListener('click', () => this.generateAccountPlan());
+        // Demo account plan generation (if present)
+        const genBtn = document.getElementById('generatePlanBtn');
+        if (genBtn) genBtn.addEventListener('click', () => this.generateAccountPlan());
 
         // Refresh buttons
         document.querySelectorAll('.refresh-btn').forEach(button => {
@@ -608,8 +609,9 @@ class Dashboard {
     async generateAccountPlan() {
         const accountName = document.getElementById('accountName').value;
         const recipients = document.getElementById('emailRecipients').value.split(',').map(email => email.trim());
-        // Show required hardcoded demo message immediately
-        this.displayHardcodedDemoMessage();
+        // Clear previous results
+        const resultsDiv = document.getElementById('demoResults');
+        if (resultsDiv) resultsDiv.innerHTML = '';
 
         try {
             const response = await fetch(`/api/demo/${accountName}`, {
@@ -625,7 +627,7 @@ class Dashboard {
             }
             
             const data = await response.json();
-            this.displayAccountPlanResults(data, { append: true });
+            this.displayAccountPlanResults(data, { append: false });
         } catch (error) {
             const resultsDiv = document.getElementById('demoResults');
             resultsDiv.insertAdjacentHTML('beforeend', `
@@ -639,11 +641,7 @@ class Dashboard {
 
     displayAccountPlanResults(data, options = { append: false }) {
         const resultsDiv = document.getElementById('demoResults');
-        // If API returned a hardcoded mock message, show it directly
-        if (data && data.message && data.success) {
-            // Suppress the API's mock account plan; we already show a hardcoded message
-            return;
-        }
+        // Expect production execution payload
 
         if (data.status === 'success') {
             let content = `
@@ -699,46 +697,7 @@ class Dashboard {
         }
     }
 
-    displayHardcodedDemoMessage() {
-        const resultsDiv = document.getElementById('demoResults');
-        const html = `
-            <div class="result-item">
-                <div class="result-header">🤖 Account Plan: TechFlow Dynamics 📊 Health: 90/100 🟢</div>
-                <div class="result-content">
-                    <strong>Summary:</strong>
-                    <ul>
-                        <li>Emails, calls, and meeting notes show strong engagement between TechFlow Dynamics and Stripe. Implementation is on track, with Q1 performance exceeding targets (23% conversion improvement, $890K cost savings, international launches in UK/Germany).</li>
-                        <li>Key personas: Priya Patel (VP Eng), David Kim (CFO), James Mitchell (CEO), Michael Torres (Product), Lisa Johnson (Finance), Jennifer Wong (CSM, Stripe), Sarah Chen (AE, Stripe), Marcus Rodriguez (SE, Stripe).</li>
-                        <li>Recent calls: Executive briefing, QBR, technical deep dives, implementation reviews — all show alignment and momentum.</li>
-                    </ul>
-                    <strong>Top 3 Strategic Recommendations:</strong>
-                    <ol>
-                        <li>Launch Stripe Billing for subscription automation by 2025-09-18</li>
-                        <li>Expand to Australia/Japan by 2025-10-15</li>
-                        <li>Implement Stripe Radar for fraud reduction by 2025-09-25</li>
-                    </ol>
-                    <strong>Expansion Opportunities:</strong>
-                    <ul>
-                        <li>Stripe Capital for revenue-based financing</li>
-                        <li>Deeper product adoption (Radar, Billing)</li>
-                        <li>APAC market entry</li>
-                    </ul>
-                    <strong>Risks:</strong>
-                    <ul>
-                        <li>Integration complexity, resource allocation, competitive pressure</li>
-                    </ul>
-                    <strong>Next Actions:</strong>
-                    <ul>
-                        <li>Schedule Q2 planning call by 2025-09-13</li>
-                        <li>Assign technical lead for APAC launch by 2025-09-20</li>
-                        <li>Review fraud metrics post-Radar by 2025-09-30</li>
-                    </ul>
-                    <div><strong>👥 Owner:</strong> @jennifer.wong@stripe.com</div>
-                </div>
-            </div>
-        `;
-        resultsDiv.innerHTML = html;
-    }
+    // Removed hardcoded demo message (production mode)
 
     // Load Queue Stats
     async loadQueueStats() {

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import nodemailer from 'nodemailer';
 import { Logger } from '../../utils/logger.js';
 import { getRedisService } from '../../services/redisService.js';
 import { statusService } from '../../services/statusService.js';
@@ -12,41 +13,64 @@ export class EmailDistributor {
     this.fromEmail = null;
     this.mockMode = false;
     this.redis = getRedisService(config);
+    this.smtpTransporter = null;
   }
 
   async initialize() {
     this.logger.info('🔄 Initializing Email Distributor...');
 
-    // Check for Postmark API key
-    if (!process.env.SMTP_API_KEY) {
-      this.logger.warn('⚠️ No Postmark API key found, using mock mode');
-      this.mockMode = true;
-      return;
+    this.fromEmail = process.env.SMTP_FROM || 'noreply@example.com';
+
+    // Prefer Postmark if API key is provided
+    if (process.env.SMTP_API_KEY) {
+      try {
+        this.postmarkApiKey = process.env.SMTP_API_KEY;
+        // Light sanity check (server info)
+        const response = await axios.get(`${this.postmarkBaseUrl}/server`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Postmark-Server-Token': this.postmarkApiKey
+          }
+        });
+        this.logger.info('✅ Email Distributor initialized (Postmark)', {
+          provider: 'Postmark',
+          server: response.data.Name
+        });
+        return;
+      } catch (error) {
+        this.logger.warn('⚠️ Postmark API verification failed, falling back to SMTP if configured', { error: error.message });
+        this.postmarkApiKey = null;
+      }
     }
 
-    // Configure Postmark API client
-    this.postmarkApiKey = process.env.SMTP_API_KEY;
-    this.fromEmail = process.env.SMTP_FROM || 'hello@joinfloor.app';
-    
-    // Test Postmark API connection
-    try {
-      const response = await axios.get(`${this.postmarkBaseUrl}/server`, {
-        headers: {
-          'Accept': 'application/json',
-          'X-Postmark-Server-Token': this.postmarkApiKey
-        }
-      });
-      
-      this.logger.info('✅ Email Distributor initialized successfully', {
-        provider: 'Postmark',
-        server: response.data.Name
-      });
-    } catch (error) {
-      this.logger.warn('⚠️ Postmark API verification failed, using mock mode', { 
-        error: error.message 
-      });
-      this.mockMode = true;
+    // Fallback to SMTP if configured
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        this.smtpTransporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: /^true$/i.test(process.env.SMTP_SECURE || 'false'),
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+          }
+        });
+        // verify connection configuration
+        await this.smtpTransporter.verify();
+        this.logger.info('✅ Email Distributor initialized (SMTP)', {
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587')
+        });
+        return;
+      } catch (error) {
+        this.logger.warn('⚠️ SMTP verification failed, enabling mock mode', { error: error.message });
+        this.smtpTransporter = null;
+      }
     }
+
+    // No real provider configured
+    this.logger.warn('⚠️ No email provider configured, using mock mode');
+    this.mockMode = true;
   }
 
   async distribute(accountPlan, config, context) {
@@ -137,50 +161,88 @@ export class EmailDistributor {
         return ok;
       }
 
-      // Use Postmark HTTP API
-      const emailData = {
-        From: this.fromEmail,
-        To: recipient.email,
-        Subject: subject,
-        HtmlBody: content.html,
-        TextBody: content.text,
-        MessageStream: 'outbound',
-        Attachments: [
-          {
-            Name: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
-            Content: Buffer.from(JSON.stringify(accountPlan, null, 2)).toString('base64'),
-            ContentType: 'application/json'
+      if (this.postmarkApiKey) {
+        // Use Postmark HTTP API
+        const emailData = {
+          From: this.fromEmail,
+          To: recipient.email,
+          Subject: subject,
+          HtmlBody: content.html,
+          TextBody: content.text,
+          MessageStream: 'outbound',
+          Attachments: [
+            {
+              Name: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
+              Content: Buffer.from(JSON.stringify(accountPlan, null, 2)).toString('base64'),
+              ContentType: 'application/json'
+            }
+          ]
+        };
+
+        const response = await axios.post(`${this.postmarkBaseUrl}/email`, emailData, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Postmark-Server-Token': this.postmarkApiKey
           }
-        ]
-      };
+        });
 
-      const response = await axios.post(`${this.postmarkBaseUrl}/email`, emailData, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Postmark-Server-Token': this.postmarkApiKey
-        }
-      });
+        this.logger.info('✅ Email sent via Postmark', {
+          recipient: recipient.email,
+          messageId: response.data.MessageID,
+          accountName,
+          executionId
+        });
 
-      this.logger.info('✅ Email sent successfully via Postmark', {
-        recipient: recipient.email,
-        messageId: response.data.MessageID,
-        accountName,
-        executionId
-      });
+        const ok = {
+          recipient: recipient.email,
+          status: 'sent',
+          messageId: response.data.MessageID,
+          sentAt: new Date().toISOString(),
+          provider: 'Postmark'
+        };
+        statusService.record('email', { account: accountName, recipient: recipient.email, ok: true });
+        return ok;
+      }
 
-      const ok = {
-        recipient: recipient.email,
-        status: 'sent',
-        messageId: response.data.MessageID,
-        sentAt: new Date().toISOString(),
-        provider: 'Postmark'
-      };
-      statusService.record('email', { account: accountName, recipient: recipient.email, ok: true });
-      return ok;
+      if (this.smtpTransporter) {
+        const response = await this.smtpTransporter.sendMail({
+          from: this.fromEmail,
+          to: recipient.email,
+          subject,
+          html: content.html,
+          text: content.text,
+          attachments: [
+            {
+              filename: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
+              content: JSON.stringify(accountPlan, null, 2),
+              contentType: 'application/json'
+            }
+          ]
+        });
+
+        this.logger.info('✅ Email sent via SMTP', {
+          recipient: recipient.email,
+          messageId: response.messageId,
+          accountName,
+          executionId
+        });
+        const ok = {
+          recipient: recipient.email,
+          status: 'sent',
+          messageId: response.messageId,
+          sentAt: new Date().toISOString(),
+          provider: 'SMTP'
+        };
+        statusService.record('email', { account: accountName, recipient: recipient.email, ok: true });
+        return ok;
+      }
+
+      // If we got here, no provider configured
+      throw new Error('No email provider configured');
 
     } catch (error) {
-      this.logger.error('❌ Failed to send email via Postmark', {
+      this.logger.error('❌ Failed to send email', {
         recipient: recipient.email,
         error: error.message,
         errorCode: error.response?.data?.ErrorCode,
