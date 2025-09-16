@@ -92,10 +92,10 @@ body {
     flex: 1;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.25rem;
 }
 
 /* Panels */
@@ -110,21 +110,21 @@ section {
 section h2 {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
     color: white;
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem;
     margin: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 600;
 }
 
 /* Configuration Panel */
 .config-panel .config-grid {
-    padding: 1.5rem;
+    padding: 1rem;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
 }
 
 .config-group {
@@ -154,15 +154,15 @@ section h2 {
 }
 
 .config-actions {
-    padding: 0 1.5rem 1.5rem;
+    padding: 0 1rem 1rem;
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     justify-content: flex-end;
 }
 
 /* Buttons */
 .btn {
-    padding: 0.75rem 1.5rem;
+    padding: 0.55rem 1rem;
     border: none;
     border-radius: 8px;
     font-size: 0.9rem;
@@ -217,17 +217,17 @@ section h2 {
 
 /* Execution Panel */
 .execution-progress {
-    padding: 1.5rem;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color);
 }
 
 .progress-bar {
     width: 100%;
-    height: 8px;
+    height: 6px;
     background: var(--light-color);
     border-radius: 4px;
     overflow: hidden;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .progress-fill {
@@ -244,15 +244,15 @@ section h2 {
 }
 
 .execution-steps {
-    padding: 1.5rem;
+    padding: 1rem;
 }
 
 .step {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
     border-radius: 8px;
     border-left: 4px solid var(--border-color);
     background: var(--light-color);
@@ -330,17 +330,17 @@ section h2 {
 
 /* Status Panel */
 .status-grid {
-    padding: 1.5rem;
+    padding: 1rem;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
 }
 
 .status-card {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1.5rem;
+    gap: 0.75rem;
+    padding: 1rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--light-color);
@@ -353,15 +353,15 @@ section h2 {
 }
 
 .status-icon {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--primary-color);
     color: white;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
 }
 
 .status-icon.success {
@@ -409,19 +409,19 @@ section h2 {
 
 /* Results Display */
 .execution-results {
-    padding: 1.5rem;
+    padding: 1rem;
     border-top: 1px solid var(--border-color);
 }
 
 .result-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
 }
 
 .result-card {
-    padding: 1rem;
+    padding: 0.75rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--light-color);
@@ -433,7 +433,7 @@ section h2 {
 }
 
 .result-value {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--primary-color);
 }
@@ -449,18 +449,18 @@ section h2 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem;
     background: var(--dark-color);
     color: white;
 }
 
 .logs-content {
-    padding: 1rem;
+    padding: 0.75rem;
     background: #1e1e1e;
     color: #f8f9fa;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.85rem;
-    max-height: 300px;
+    font-size: 0.8rem;
+    max-height: 280px;
     overflow-y: auto;
 }
 

@@ -51,6 +51,20 @@
                                 <div class="form-group">
                                     <label>Provider</label>
                                     <select id="chat_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
+                                    <div class="provider-choices" id="chat_provider_cards" style="margin-top:6px;">
+                                        <button type="button" class="provider-card" data-provider="openai">
+                                            <img src="/static/img/models/openai.png" alt="OpenAI">
+                                            <span class="provider-name">OpenAI</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="anthropic">
+                                            <img src="/static/img/models/claude.svg" alt="Anthropic">
+                                            <span class="provider-name">Anthropic</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="mixed">
+                                            <i class="fas fa-layer-group" style="color:#3498db"></i>
+                                            <span class="provider-name">Mixed</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label>Model (optional)</label>
@@ -61,9 +75,7 @@
                                     <select id="chat_tools"><option value="false">No</option><option value="true">Yes</option></select>
                                 </div>
                             </div>
-                            <label>System Prompt (optional)</label>
-                            <textarea id="chat_system" placeholder="Instruct the assistant's behavior..."></textarea>
-                            <div class="demo-results" id="chat_box" style="height:260px;overflow:auto;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:12px"></div>
+                            <div class="chat-box" id="chat_box"></div>
                             <div class="demo-controls">
                                 <div class="input-group" style="flex:1"><input id="chat_input" placeholder="Type a message and press Send..." /></div>
                                 <button id="chat_send" class="primary-button">Send</button>
@@ -87,7 +99,7 @@
                                 <div class="form-group">
                                     <label>Slack</label>
                                     <div class="system-grid">
-                                        <div><input type="checkbox" id="slack_enable" /> Enable</div>
+                                        <div style="display:flex;align-items:center;gap:8px"><label class="switch"><input type="checkbox" id="slack_enable" /><span class="slider"></span></label><span>Enable</span></div>
                                         <div><input id="slack_channel" placeholder="#account-planning" /></div>
                                         <div>
                                             <select id="slack_format"><option value="summary">summary</option><option value="detailed">detailed</option><option value="alert">alert</option><option value="dealflow">dealflow</option></select>
@@ -97,7 +109,7 @@
                                 <div class="form-group">
                                     <label>Email</label>
                                     <div class="system-grid">
-                                        <div><input type="checkbox" id="email_enable" /> Enable</div>
+                                        <div style="display:flex;align-items:center;gap:8px"><label class="switch"><input type="checkbox" id="email_enable" /><span class="slider"></span></label><span>Enable</span></div>
                                         <div><input id="email_recipients" placeholder="demo@example.com, team@example.com" /></div>
                                         <div><select id="email_template"><option value="executive">executive</option><option value="summary">summary</option><option value="detailed">detailed</option></select></div>
                                     </div>
@@ -106,13 +118,13 @@
                                 <div class="form-group">
                                     <label>CRM</label>
                                     <div>
-                                        <label><input type="checkbox" id="crm_enable" /> Enable</label>
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><label class="switch"><input type="checkbox" id="crm_enable" /><span class="slider"></span></label><span>Enable</span></div>
                                         <div>
-                                            <label><input type="checkbox" class="crm_action" value="updateAccount" checked /> updateAccount</label>
-                                            <label><input type="checkbox" class="crm_action" value="createTasks" /> createTasks</label>
-                                            <label><input type="checkbox" class="crm_action" value="updateOpportunities" /> updateOpportunities</label>
-                                            <label><input type="checkbox" class="crm_action" value="logActivity" /> logActivity</label>
-                                            <label><input type="checkbox" class="crm_action" value="createNotes" /> createNotes</label>
+                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="updateAccount" checked /><span>Update Account</span></label>
+                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="createTasks" /><span>Create Tasks</span></label>
+                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="updateOpportunities" /><span>Update Opportunities</span></label>
+                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="logActivity" /><span>Log Activity</span></label>
+                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="createNotes" /><span>Create Notes</span></label>
                                         </div>
                                     </div>
                                 </div>
@@ -671,6 +683,40 @@
       // Simple Chat + Demo handlers (inline for dashboard)
       (function(){
         const box = id => document.getElementById(id);
+        // Provider image cards -> sync to select
+        (function(){
+          const sel = box('chat_provider');
+          const cards = document.getElementById('chat_provider_cards');
+          if (!sel || !cards) return;
+          const setActive = (v)=>{
+            Array.from(cards.querySelectorAll('.provider-card')).forEach(c=>c.classList.toggle('active', c.dataset.provider===v));
+            sel.value = v;
+          };
+          cards.addEventListener('click', (e)=>{
+            const btn = e.target.closest('.provider-card');
+            if (!btn) return;
+            setActive(btn.dataset.provider);
+          });
+          setActive(sel.value||'mixed');
+        })();
+        // Enhance chat tools select to segmented
+        (function(){
+          const sel = box('chat_tools');
+          if (!sel) return;
+          const parent = sel.parentElement;
+          const wrap = document.createElement('div');
+          wrap.className = 'segmented';
+          wrap.id = 'chat_tools_segmented';
+          const mk = (label, value) => { const b = document.createElement('button'); b.type='button'; b.className='seg'; b.dataset.value = value; b.textContent = label; return b; };
+          const bNo = mk('No', 'false');
+          const bYes = mk('Yes', 'true');
+          wrap.appendChild(bNo); wrap.appendChild(bYes);
+          parent.insertBefore(wrap, sel.nextSibling);
+          sel.classList.add('hidden');
+          const setActive = (v) => { [bNo,bYes].forEach(b=>b.classList.toggle('active', b.dataset.value===v)); };
+          setActive(sel.value || 'false');
+          [bNo,bYes].forEach(b=>b.addEventListener('click', ()=>{ sel.value = b.dataset.value; setActive(sel.value); }));
+        })();
         if (box('chat_send')) {
           const chat = [];
           const add = (role, content) => {
@@ -678,7 +724,7 @@
             const b = box('chat_box');
             const div = document.createElement('div');
             div.textContent = role + ': ' + content;
-            div.style.color = role === 'user' ? '#7ee787' : '#9ccaff';
+            div.style.color = role === 'user' ? '#2c7a7b' : '#1f4788';
             b.appendChild(div); b.scrollTop = b.scrollHeight;
           };
           const send = async () => {
@@ -687,7 +733,6 @@
             add('user', text);
             const body = {
               messages: chat,
-              system: box('chat_system').value.trim() || undefined,
               provider: box('chat_provider').value,
               modelName: box('chat_model').value.trim() || undefined,
               useTools: box('chat_tools').value === 'true'
