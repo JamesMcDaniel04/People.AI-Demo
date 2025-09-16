@@ -43,9 +43,102 @@
                         <h2><i class="fas fa-rocket"></i> Account Plan Demo</h2>
                         <p>Generate AI-powered account plans for demonstration</p>
                     </div>
-                    <div class="demo-card" style="text-align:center;padding:32px">
-                        <p>Use the unified Settings & Chat page to enter an account, add instructions, and pick Slack/Email/CRM distribution — all in one place.</p>
-                        <a class="primary-button" href="/#demo"><i class="fas fa-external-link-alt"></i> Open Combined Demo</a>
+                    <!-- AI Chatbot -->
+                    <div class="system-card">
+                        <div class="card-header"><h3><i class="fas fa-comments"></i> AI Chatbot</h3></div>
+                        <div class="card-content">
+                            <div class="system-grid">
+                                <div class="form-group">
+                                    <label>Provider</label>
+                                    <select id="chat_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Model (optional)</label>
+                                    <input id="chat_model" placeholder="leave empty for defaults" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Use Tools</label>
+                                    <select id="chat_tools"><option value="false">No</option><option value="true">Yes</option></select>
+                                </div>
+                            </div>
+                            <label>System Prompt (optional)</label>
+                            <textarea id="chat_system" placeholder="Instruct the assistant's behavior..."></textarea>
+                            <div class="demo-results" id="chat_box" style="height:260px;overflow:auto;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:12px"></div>
+                            <div class="demo-controls">
+                                <div class="input-group" style="flex:1"><input id="chat_input" placeholder="Type a message and press Send..." /></div>
+                                <button id="chat_send" class="primary-button">Send</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demo Generator -->
+                    <div class="system-card" id="demo">
+                        <div class="card-header"><h3><i class="fas fa-share-alt"></i> Demo: Generate & Distribute Account Plan</h3></div>
+                        <div class="card-content">
+                            <div class="system-grid">
+                                <div class="form-group"><label>Account Name</label><input id="demo_account" placeholder="e.g., contoso" /></div>
+                                <div class="form-group"><label>Provider</label><select id="demo_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select></div>
+                                <div class="form-group"><label>Model (optional)</label><input id="demo_model" placeholder="leave empty for defaults" /></div>
+                            </div>
+                            <label>Agent Instructor Directives</label>
+                            <textarea id="demo_instructions" placeholder="Explain how the plan should be framed (tone, priorities, constraints)..."></textarea>
+
+                            <div class="system-grid">
+                                <div class="form-group">
+                                    <label>Slack</label>
+                                    <div class="system-grid">
+                                        <div><input type="checkbox" id="slack_enable" /> Enable</div>
+                                        <div><input id="slack_channel" placeholder="#account-planning" /></div>
+                                        <div>
+                                            <select id="slack_format"><option value="summary">summary</option><option value="detailed">detailed</option><option value="alert">alert</option><option value="dealflow">dealflow</option></select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <div class="system-grid">
+                                        <div><input type="checkbox" id="email_enable" /> Enable</div>
+                                        <div><input id="email_recipients" placeholder="demo@example.com, team@example.com" /></div>
+                                        <div><select id="email_template"><option value="executive">executive</option><option value="summary">summary</option><option value="detailed">detailed</option></select></div>
+                                    </div>
+                                    <input id="email_subject" placeholder="Subject (optional)" />
+                                </div>
+                                <div class="form-group">
+                                    <label>CRM</label>
+                                    <div>
+                                        <label><input type="checkbox" id="crm_enable" /> Enable</label>
+                                        <div>
+                                            <label><input type="checkbox" class="crm_action" value="updateAccount" checked /> updateAccount</label>
+                                            <label><input type="checkbox" class="crm_action" value="createTasks" /> createTasks</label>
+                                            <label><input type="checkbox" class="crm_action" value="updateOpportunities" /> updateOpportunities</label>
+                                            <label><input type="checkbox" class="crm_action" value="logActivity" /> logActivity</label>
+                                            <label><input type="checkbox" class="crm_action" value="createNotes" /> createNotes</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="demo-controls" style="gap:8px;align-items:flex-end">
+                                <div class="input-group" style="max-width:280px">
+                                    <label for="demo_cron">Schedule (cron optional)</label>
+                                    <input id="demo_cron" placeholder="e.g., 0 9 * * *" />
+                                </div>
+                                <button id="demo_generate" class="secondary-button">Generate Plan (Preview)</button>
+                                <button id="demo_distribute" class="primary-button">Generate + Distribute</button>
+                                <button id="demo_save_workflow" class="secondary-button"><i class="fas fa-save"></i> Save as Workflow</button>
+                                <button id="demo_save_enable" class="secondary-button"><i class="fas fa-calendar"></i> Save + Enable Schedule</button>
+                            </div>
+                            <div class="system-grid">
+                                <div class="system-card" style="flex:1">
+                                    <div class="card-header"><strong>Plan Preview</strong></div>
+                                    <div id="demo_plan" class="demo-results" style="height:220px"></div>
+                                </div>
+                                <div class="system-card" style="flex:1">
+                                    <div class="card-header"><strong>Distribution Results</strong></div>
+                                    <div id="demo_dist" class="demo-results" style="height:220px"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -568,5 +661,96 @@
     </div>
 
     <script src="/static/js/dashboard.js"></script>
+    <script>
+      // Simple Chat + Demo handlers (inline for dashboard)
+      (function(){
+        const box = id => document.getElementById(id);
+        if (box('chat_send')) {
+          const chat = [];
+          const add = (role, content) => {
+            chat.push({ role, content });
+            const b = box('chat_box');
+            const div = document.createElement('div');
+            div.textContent = role + ': ' + content;
+            div.style.color = role === 'user' ? '#7ee787' : '#9ccaff';
+            b.appendChild(div); b.scrollTop = b.scrollHeight;
+          };
+          const send = async () => {
+            const text = box('chat_input').value.trim();
+            if (!text) return; box('chat_input').value = '';
+            add('user', text);
+            const body = {
+              messages: chat,
+              system: box('chat_system').value.trim() || undefined,
+              provider: box('chat_provider').value,
+              modelName: box('chat_model').value.trim() || undefined,
+              useTools: box('chat_tools').value === 'true'
+            };
+            const res = await fetch('/settings/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            const j = await res.json();
+            add('assistant', j.reply || ('[error] ' + (j.error||'unknown')));
+          };
+          box('chat_send').onclick = send;
+          box('chat_input').addEventListener('keydown', e => { if (e.key==='Enter') send(); });
+        }
+
+        function distributorsFromUI(){
+          const arr=[];
+          if (box('slack_enable')?.checked) {
+            const channel = box('slack_channel').value.trim() || '#account-planning';
+            const format = box('slack_format').value || 'summary';
+            arr.push({ type:'slack', config:{ channels:[{channel}], format } });
+          }
+          if (box('email_enable')?.checked) {
+            const recs = (box('email_recipients').value||'').split(',').map(s=>s.trim()).filter(Boolean).map(email=>({email}));
+            arr.push({ type:'email', config:{ recipients: recs.length?recs:[{email:'demo@example.com'}], template: box('email_template').value||'executive', subject: box('email_subject').value||undefined } });
+          }
+          if (box('crm_enable')?.checked) {
+            const actions = Array.from(document.querySelectorAll('.crm_action:checked')).map(x=>x.value);
+            arr.push({ type:'crm', config:{ actions: actions.length?actions:['updateAccount'] } });
+          }
+          return arr;
+        }
+        async function runDemo(distribute){
+          const accountName = box('demo_account').value.trim() || 'stripe';
+          const instructions = box('demo_instructions').value.trim() || 'Be concise and executive-ready.';
+          const provider = box('demo_provider').value;
+          const modelName = (box('demo_model').value||'').trim() || undefined;
+          const distributors = distribute?distributorsFromUI():[];
+          const res = await fetch('/instructor/run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accountName, instructions, provider, modelName, distributors }) });
+          const j = await res.json();
+          box('demo_plan').textContent = JSON.stringify(j.plan||j, null, 2);
+          if (distribute) box('demo_dist').textContent = JSON.stringify(j.distributionResults||{}, null, 2);
+        }
+        if (box('demo_generate')) box('demo_generate').onclick = () => runDemo(false);
+        if (box('demo_distribute')) box('demo_distribute').onclick = () => runDemo(true);
+
+        async function saveWorkflow(enableSchedule) {
+          const accountName = box('demo_account').value.trim() || 'stripe';
+          const distributors = distributorsFromUI();
+          const cron = (box('demo_cron')?.value || '').trim();
+          const trigger = (enableSchedule && cron) ? { type:'schedule' } : { type:'manual' };
+          const wf = {
+            name: `Demo: ${accountName}`,
+            description: 'Demo workflow created from Chat & Demo page',
+            trigger,
+            schedule: (trigger.type==='schedule') ? cron : undefined,
+            accounts: [{ accountName }],
+            distributors,
+            enabled: true,
+            engine: 'internal'
+          };
+          const res = await fetch('/workflows', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(wf) });
+          const j = await res.json();
+          if (j?.workflow?.id) {
+            alert(`Workflow saved${trigger.type==='schedule' ? ' and scheduled' : ''}. ID: ${j.workflow.id}`);
+          } else {
+            alert('Failed to save workflow: ' + (j.error || 'unknown'));
+          }
+        }
+        if (box('demo_save_workflow')) box('demo_save_workflow').onclick = () => saveWorkflow(false);
+        if (box('demo_save_enable')) box('demo_save_enable').onclick = () => saveWorkflow(true);
+      })();
+    </script>
 </body>
 </html>

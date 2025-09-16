@@ -83,13 +83,13 @@ export class WorkflowAPI {
   }
 
   setupRoutes() {
-    // Homepage: Settings + Chatbot
+    // Homepage: Unified Dashboard (includes Demo + Chat)
     this.app.get('/', (req, res) => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      res.sendFile(join(__dirname, '../../public/settings.html'));
+      res.sendFile(join(__dirname, '../../public/dashboard.html'));
     });
-    // Keep dashboard accessible at /dashboard
+    // Alias for direct dashboard path
     this.app.get('/dashboard', (req, res) => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);

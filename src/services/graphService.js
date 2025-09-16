@@ -89,8 +89,8 @@ export class GraphService {
   async initializeLocal() {
     try {
       const localUri = 'bolt://localhost:7687';
-      const localUser = 'neo4j';
-      const localPassword = 'peopleai2024';
+      const localUser = process.env.NEO4J_USER || 'neo4j';
+      const localPassword = process.env.NEO4J_PASSWORD || 'peopleai2024';
 
       this.driver = neo4j.driver(
         localUri,
@@ -810,6 +810,50 @@ export class GraphService {
     }
   }
 
+  isConnected() {
+    return this.connected || this.mockMode;
+  }
+
+  isMockMode() {
+    return this.mockMode;
+  }
+
+  async healthCheck() {
+    if (this.mockMode) {
+      return {
+        status: 'mock',
+        connected: true,
+        uri: 'mock://localhost:7687'
+      };
+    }
+
+    if (!this.connected) {
+      return {
+        status: 'disconnected',
+        connected: false
+      };
+    }
+
+    try {
+      const session = this.driver.session();
+      const result = await session.run('RETURN 1 as test');
+      await session.close();
+
+      return {
+        status: 'connected',
+        connected: true,
+        uri: this.driver._url || process.env.NEO4J_URI,
+        database: process.env.NEO4J_DATABASE || 'neo4j'
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        connected: false,
+        error: error.message
+      };
+    }
+  }
+
   async close() {
     if (this.driver) {
       await this.driver.close();
@@ -817,4 +861,14 @@ export class GraphService {
       this.logger.info('🔐 Neo4j Graph Service disconnected');
     }
   }
+}
+
+// Singleton instance
+let graphServiceInstance = null;
+
+export function getGraphService(config) {
+  if (!graphServiceInstance) {
+    graphServiceInstance = new GraphService(config);
+  }
+  return graphServiceInstance;
 }
