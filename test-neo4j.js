@@ -1,64 +1,50 @@
 #!/usr/bin/env node
 
-// Test Neo4j Aura connection
-import neo4j from 'neo4j-driver';
-import dotenv from 'dotenv';
+import { config } from 'dotenv';
+import { getGraphService } from './src/services/graphService.js';
 
-dotenv.config();
+config();
 
-async function testNeo4jConnection() {
-  console.log('🔄 Testing Neo4j Aura connection...');
-  
-  const driver = neo4j.driver(
-    process.env.NEO4J_URI,
-    neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD),
-    { 
-      maxConnectionLifetime: 30 * 60 * 1000, // 30 minutes
-      maxConnectionPoolSize: 50,
-      connectionAcquisitionTimeout: 2 * 60 * 1000, // 2 minutes
-      connectionTimeout: 30 * 1000 // 30 seconds
-    }
-  );
+async function testNeo4j() {
+  console.log('Testing Neo4j connection...');
+
+  const graphService = getGraphService({
+    logLevel: 'info'
+  });
 
   try {
-    // Test basic connectivity
-    const session = driver.session({ database: 'neo4j' });
-    
-    console.log('🌐 Connecting to Neo4j Aura...');
-    const result = await session.run('RETURN "Hello Neo4j!" as message, datetime() as timestamp');
-    const record = result.records[0];
-    
-    console.log('✅ Connection successful!');
-    console.log(`📧 Message: ${record.get('message')}`);
-    console.log(`⏰ Timestamp: ${record.get('timestamp')}`);
-    
-    // Test database info
-    const dbInfo = await session.run('CALL db.info()');
-    const dbRecord = dbInfo.records[0];
-    console.log(`📊 Database: ${dbRecord.get('name')} (${dbRecord.get('edition')})`);
-    
-    await session.close();
-    await driver.close();
-    
-    console.log('🎉 Neo4j Aura connection test completed successfully!');
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Neo4j connection failed:', error.message);
-    if (error.code) {
-      console.error(`🔍 Error code: ${error.code}`);
+    // Initialize the service
+    const initialized = await graphService.initialize();
+    console.log('Neo4j initialized:', initialized);
+
+    // Check connection status
+    const isConnected = graphService.isConnected();
+    const isMockMode = graphService.isMockMode();
+    console.log('Connected:', isConnected);
+    console.log('Mock mode:', isMockMode);
+
+    // Get health check
+    const healthCheck = await graphService.healthCheck();
+    console.log('Health check:', JSON.stringify(healthCheck, null, 2));
+
+    // Test basic operations
+    if (isConnected && !isMockMode) {
+      console.log('\nTesting basic database operations...');
+
+      // Test simple query
+      const result = await graphService.runQuery('RETURN 1 as test');
+      console.log('Simple query result:', result);
+
+      // Test version info
+      const version = await graphService.runQuery('CALL dbms.components() YIELD name, versions, edition');
+      console.log('Database version:', version);
     }
-    await driver.close();
-    return false;
+
+    console.log('\n✅ Neo4j test completed successfully!');
+  } catch (error) {
+    console.error('❌ Neo4j test failed:', error.message);
+    process.exit(1);
   }
 }
 
-// Run the test
-testNeo4jConnection()
-  .then(success => {
-    process.exit(success ? 0 : 1);
-  })
-  .catch(error => {
-    console.error('💥 Unexpected error:', error);
-    process.exit(1);
-  });
+testNeo4j();

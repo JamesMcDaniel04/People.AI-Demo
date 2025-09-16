@@ -13,32 +13,109 @@ export class GraphService {
   async initialize() {
     this.logger.info('🔄 Initializing Neo4j Graph Service...');
 
+    // Check if Neo4j environment variables are configured
+    if (!process.env.NEO4J_URI || !process.env.NEO4J_USER || !process.env.NEO4J_PASSWORD) {
+      this.logger.warn('⚠️ Neo4j environment variables not configured, using mock mode');
+      this.connected = false;
+      return false;
+    }
+
     try {
+      // First try local container connection
+      let uri = process.env.NEO4J_URI;
+      let user = process.env.NEO4J_USER;
+      let password = process.env.NEO4J_PASSWORD;
+
+      // If using cloud URI but failed, try local container
+      if (uri.includes('.databases.neo4j.io')) {
+        this.logger.info('🔄 Attempting Neo4j Aura connection...');
+      } else {
+        this.logger.info('🔄 Attempting local Neo4j connection...');
+      }
+
       this.driver = neo4j.driver(
-        process.env.NEO4J_URI,
-        neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD),
-        { 
+        uri,
+        neo4j.auth.basic(user, password),
+        {
           maxConnectionLifetime: 30 * 60 * 1000, // 30 minutes
-          maxConnectionPoolSize: 50,
-          connectionAcquisitionTimeout: 2 * 60 * 1000, // 2 minutes
-          connectionTimeout: 30 * 1000 // 30 seconds
+          maxConnectionPoolSize: 10, // Reduced for better reliability
+          connectionAcquisitionTimeout: 10 * 1000, // 10 seconds (reduced)
+          connectionTimeout: 5 * 1000, // 5 seconds (reduced)
+          encrypted: uri.includes('neo4j+s://') ? 'ENCRYPTION_ON' : 'ENCRYPTION_OFF'
         }
       );
 
-      // Test connection
+      // Test connection with timeout
       const session = this.driver.session({ database: 'neo4j' });
-      await session.run('RETURN "Connected to Neo4j Aura!" as message');
+
+      try {
+        const result = await Promise.race([
+          session.run('RETURN "Connected!" as message'),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Connection timeout')), 5000)
+          )
+        ]);
+
+        await session.close();
+        this.connected = true;
+        this.logger.info('✅ Neo4j Graph Service connected successfully');
+
+        // Initialize schema
+        await this.initializeSchema();
+        return true;
+
+      } catch (sessionError) {
+        await session.close();
+        throw sessionError;
+      }
+
+    } catch (error) {
+      this.logger.error('❌ Neo4j connection failed', {
+        error: error.message,
+        uri: process.env.NEO4J_URI?.replace(/\/\/.*@/, '//***@')
+      });
+
+      // Try fallback to local container if cloud failed
+      if (process.env.NEO4J_URI?.includes('.databases.neo4j.io')) {
+        this.logger.info('🔄 Attempting fallback to local Neo4j container...');
+        return await this.initializeLocal();
+      }
+
+      this.connected = false;
+      return false;
+    }
+  }
+
+  async initializeLocal() {
+    try {
+      const localUri = 'bolt://localhost:7687';
+      const localUser = 'neo4j';
+      const localPassword = 'peopleai2024';
+
+      this.driver = neo4j.driver(
+        localUri,
+        neo4j.auth.basic(localUser, localPassword),
+        {
+          maxConnectionLifetime: 30 * 60 * 1000,
+          maxConnectionPoolSize: 10,
+          connectionAcquisitionTimeout: 10 * 1000,
+          connectionTimeout: 5 * 1000,
+          encrypted: 'ENCRYPTION_OFF'
+        }
+      );
+
+      const session = this.driver.session({ database: 'neo4j' });
+      await session.run('RETURN "Local Neo4j connected!" as message');
       await session.close();
 
       this.connected = true;
-      this.logger.info('✅ Neo4j Graph Service connected to Aura');
+      this.logger.info('✅ Neo4j Graph Service connected to local container');
 
-      // Initialize schema
       await this.initializeSchema();
-
       return true;
+
     } catch (error) {
-      this.logger.error('❌ Neo4j connection failed', { error: error.message });
+      this.logger.error('❌ Local Neo4j connection also failed', { error: error.message });
       this.connected = false;
       return false;
     }
