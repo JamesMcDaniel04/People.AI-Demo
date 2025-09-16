@@ -3,163 +3,871 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Account Planner - Demo Interface</title>
-    <link rel="stylesheet" href="/static/css/demo.css">
+    <title>AI Account Planner - Demo Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="demo-container">
-        <header class="demo-header">
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
             <div class="header-content">
-                <div class="logo">
+                <div class="logo-section">
                     <i class="fas fa-brain"></i>
                     <h1>AI Account Planner</h1>
+                    <span class="version">v1.0.0</span>
                 </div>
-                <div class="status-indicator" id="systemStatus">
-                    <i class="fas fa-circle"></i>
-                    <span>System Ready</span>
+                <div class="system-status" id="systemStatus">
+                    <div class="status-indicator" id="statusIndicator">
+                        <i class="fas fa-circle"></i>
+                        <span id="statusText">Checking...</span>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <main class="demo-main">
-            <!-- Configuration Panel -->
-            <section class="config-panel">
-                <h2><i class="fas fa-cog"></i> Workflow Configuration</h2>
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Navigation Tabs -->
+            <nav class="dashboard-tabs">
+                <button class="tab-button active" data-tab="demo">Demo</button>
+                <button class="tab-button" data-tab="workflows">Workflows</button>
+                <button class="tab-button" data-tab="integration">Integration</button>
+                <button class="tab-button" data-tab="settings">Settings</button>
+            </nav>
+
+            <!-- Demo Tab -->
+            <div class="tab-content active" id="demo-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-rocket"></i> Account Plan Demo</h2>
+                        <p>Generate AI-powered account plans for demonstration</p>
+                    </div>
+                    <!-- AI Chatbot -->
+                    <div class="system-card">
+                        <div class="card-header"><h3><i class="fas fa-comments"></i> AI Chatbot</h3></div>
+                        <div class="card-content">
+                            <div class="system-grid">
+                                <div class="form-group">
+                                    <label>Provider</label>
+                                    <select id="chat_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Model (optional)</label>
+                                    <input id="chat_model" placeholder="leave empty for defaults" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Use Tools</label>
+                                    <select id="chat_tools"><option value="false">No</option><option value="true">Yes</option></select>
+                                </div>
+                            </div>
+                            <label>System Prompt (optional)</label>
+                            <textarea id="chat_system" placeholder="Instruct the assistant's behavior..."></textarea>
+                            <div class="demo-results" id="chat_box" style="height:260px;overflow:auto;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:12px"></div>
+                            <div class="demo-controls">
+                                <div class="input-group" style="flex:1"><input id="chat_input" placeholder="Type a message and press Send..." /></div>
+                                <button id="chat_send" class="primary-button">Send</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demo Generator -->
+                    <div class="system-card" id="demo">
+                        <div class="card-header"><h3><i class="fas fa-share-alt"></i> Demo: Generate & Distribute Account Plan</h3></div>
+                        <div class="card-content">
+                            <div class="system-grid">
+                                <div class="form-group"><label>Account Name</label><input id="demo_account" placeholder="e.g., contoso" /></div>
+                                <div class="form-group"><label>Provider</label><select id="demo_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select></div>
+                                <div class="form-group"><label>Model (optional)</label><input id="demo_model" placeholder="leave empty for defaults" /></div>
+                            </div>
+                            <label>Agent Instructor Directives</label>
+                            <textarea id="demo_instructions" placeholder="Explain how the plan should be framed (tone, priorities, constraints)..."></textarea>
+
+                            <div class="system-grid">
+                                <div class="form-group">
+                                    <label>Slack</label>
+                                    <div class="system-grid">
+                                        <div><input type="checkbox" id="slack_enable" /> Enable</div>
+                                        <div><input id="slack_channel" placeholder="#account-planning" /></div>
+                                        <div>
+                                            <select id="slack_format"><option value="summary">summary</option><option value="detailed">detailed</option><option value="alert">alert</option><option value="dealflow">dealflow</option></select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <div class="system-grid">
+                                        <div><input type="checkbox" id="email_enable" /> Enable</div>
+                                        <div><input id="email_recipients" placeholder="demo@example.com, team@example.com" /></div>
+                                        <div><select id="email_template"><option value="executive">executive</option><option value="summary">summary</option><option value="detailed">detailed</option></select></div>
+                                    </div>
+                                    <input id="email_subject" placeholder="Subject (optional)" />
+                                </div>
+                                <div class="form-group">
+                                    <label>CRM</label>
+                                    <div>
+                                        <label><input type="checkbox" id="crm_enable" /> Enable</label>
+                                        <div>
+                                            <label><input type="checkbox" class="crm_action" value="updateAccount" checked /> updateAccount</label>
+                                            <label><input type="checkbox" class="crm_action" value="createTasks" /> createTasks</label>
+                                            <label><input type="checkbox" class="crm_action" value="updateOpportunities" /> updateOpportunities</label>
+                                            <label><input type="checkbox" class="crm_action" value="logActivity" /> logActivity</label>
+                                            <label><input type="checkbox" class="crm_action" value="createNotes" /> createNotes</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="demo-controls" style="gap:8px;align-items:flex-end">
+                                <div class="input-group" style="max-width:280px">
+                                    <label for="demo_cron">Schedule (cron optional)</label>
+                                    <input id="demo_cron" placeholder="e.g., 0 9 * * *" />
+                                </div>
+                                <button id="demo_generate" class="secondary-button">Generate Plan (Preview)</button>
+                                <button id="demo_distribute" class="primary-button">Generate + Distribute</button>
+                                <button id="demo_save_workflow" class="secondary-button"><i class="fas fa-save"></i> Save as Workflow</button>
+                                <button id="demo_save_enable" class="secondary-button"><i class="fas fa-calendar"></i> Save + Enable Schedule</button>
+                            </div>
+                            <div class="system-grid">
+                                <div class="system-card" style="flex:1">
+                                    <div class="card-header">
+                                        <strong>Plan Preview</strong>
+                                        <div class="header-actions">
+                                            <button class="secondary-button" id="btnCopyPlan" title="Copy JSON"><i class="fas fa-copy"></i></button>
+                                            <button class="secondary-button" id="btnDownloadPlan" title="Download JSON"><i class="fas fa-download"></i></button>
+                                        </div>
+                                    </div>
+                                    <div id="demo_plan" class="demo-results" style="min-height:220px"></div>
+                                </div>
+                                <div class="system-card" style="flex:1">
+                                    <div class="card-header"><strong>Distribution Results</strong></div>
+                                    <div id="demo_dist" class="demo-results" style="height:220px"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-sliders-h"></i> Settings</h2>
+                        <p>Configure AI prompts, data source, MCPs and logging</p>
+                    </div>
+
+                    <div class="system-grid">
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-robot"></i> AI Instructions</h3>
+                                <div class="header-actions">
+                                    <button class="refresh-btn" data-action="load-settings"><i class="fas fa-sync-alt"></i></button>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="aiProvider">Provider</label>
+                                    <select id="aiProvider">
+                                        <option value="mixed">Mixed</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                    </select>
+                                    <div class="provider-choices" id="aiProviderChips">
+                                        <button type="button" class="provider-card" data-provider="openai">
+                                            <img src="/static/img/logos/openai.svg" alt="OpenAI">
+                                            <span class="provider-name">OpenAI</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="anthropic">
+                                            <img src="/static/img/logos/anthropic.svg" alt="Anthropic">
+                                            <span class="provider-name">Anthropic</span>
+                                        </button>
+                                        <button type="button" class="provider-card" data-provider="mixed">
+                                            <i class="fas fa-layer-group" style="color:#3498db"></i>
+                                            <span class="provider-name">Mixed</span>
+                                        </button>
+                                    </div>
+                                    <div class="model-badges" aria-hidden="true">
+                                        <span class="model-badge">GPT-4o</span>
+                                        <span class="model-badge">GPT-4o mini</span>
+                                        <span class="model-badge">Claude 3.5 Sonnet</span>
+                                        <span class="model-badge">Claude 3 Haiku</span>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiTemperature">Temperature</label>
+                                    <input type="number" step="0.1" min="0" max="1" id="aiTemperature" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiSystemPrompt">System Prompt</label>
+                                    <textarea id="aiSystemPrompt" placeholder="Customize the assistant instruction"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="aiToolSystemPrompt">Tool System Prompt</label>
+                                    <textarea id="aiToolSystemPrompt" placeholder="Customize the tool-enabled instruction"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Model Selection</label>
+                                    <div class="system-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                        <div>
+                                            <label for="aiModelHealth">Health Model</label>
+                                            <select id="aiModelHealth"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelOpportunities">Opportunities Model</label>
+                                            <select id="aiModelOpportunities"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelRisks">Risks Model</label>
+                                            <select id="aiModelRisks"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelRecommendations">Recommendations Model</label>
+                                            <select id="aiModelRecommendations"></select>
+                                        </div>
+                                        <div>
+                                            <label for="aiModelInsights">Insights Model</label>
+                                            <select id="aiModelInsights"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-database"></i> Data & MCP</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="dataSource">Data Source</label>
+                                    <select id="dataSource">
+                                        <option value="sample">Sample (no keys)</option>
+                                        <option value="mcp">MCP (Klavis)</option>
+                                        <option value="external">External (News/API)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>MCP Servers</label>
+                                    <div class="mcp-grid">
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpGmail" />
+                                            <img src="/static/img/logos/gmail.svg" alt="Gmail">
+                                            <span class="mcp-name">Gmail</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpCalendar" />
+                                            <img src="/static/img/logos/googlecalendar.svg" alt="Google Calendar">
+                                            <span class="mcp-name">Google Calendar</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpDrive" />
+                                            <img src="/static/img/logos/googledrive.svg" alt="Google Drive">
+                                            <span class="mcp-name">Google Drive</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpSlack" />
+                                            <img src="/static/img/logos/slack.svg" alt="Slack">
+                                            <span class="mcp-name">Slack</span>
+                                        </label>
+                                        <label class="mcp-toggle">
+                                            <input type="checkbox" id="mcpNotion" />
+                                            <img src="/static/img/logos/notion.svg" alt="Notion">
+                                            <span class="mcp-name">Notion</span>
+                                        </label>
+                                    </div>
+                                    <small>Changes to data source/MCPs may require reload.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="system-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-bug"></i> Error Handling</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label for="logLevel">Log Level</label>
+                                    <select id="logLevel">
+                                        <option value="error">error</option>
+                                        <option value="warn">warn</option>
+                                        <option value="info">info</option>
+                                        <option value="debug">debug</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <small>Advanced error handling settings can be configured via environment variables for now.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 1rem;">
+                        <button class="secondary-button" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+                        <button class="primary-button" id="applySettingsBtn"><i class="fas fa-refresh"></i> Apply & Reload</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflows Tab -->
+            <div class="tab-content" id="workflows-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-sitemap"></i> Workflow Management</h2>
+                        <button id="createWorkflowBtn" class="primary-button">
+                            <i class="fas fa-plus"></i> Create Workflow
+                        </button>
+                    </div>
+                    
+                    <div class="workflows-list" id="workflowsList">
+                        <div class="loading">Loading workflows...</div>
+                    </div>
+                </div>
+
+                <!-- Job Queue Management (moved from Queues tab) -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-tasks"></i> Job Queue Management</h2>
+                        <div class="header-actions">
+                            <button class="secondary-button" onclick="window.open('/admin/queues', '_blank')">
+                                <i class="fas fa-external-link-alt"></i> Bull Board Dashboard
+                            </button>
+                            <button class="refresh-btn" data-endpoint="/queue/stats">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="queue-stats" id="queueStats">
+                        <div class="loading">Loading queue statistics...</div>
+                    </div>
+                </div>
+
+                <!-- Demo Workflow Outline & Creator -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-lightbulb"></i> Demo Workflow: Account Plan Orchestration</h2>
+                        <p>Collect, analyze, and distribute account plans via Email and Slack (#dealflow).</p>
+                    </div>
+                    <div class="system-grid">
+                        <div class="system-card" data-edit-key="workflow.goal" data-edit-title="Goal">
+                            <div class="card-header"><h3>Goal</h3></div>
+                            <div class="card-content">
+                                Generate comprehensive account plans by collecting data from multiple sources, analyzing account health, and distributing actionable insights to stakeholders via email, Slack, and Airtable.
+                            </div>
+                        </div>
+                        <div class="system-card" data-edit-key="workflow.integrations" data-edit-title="Integrations">
+                            <div class="card-header"><h3>Integrations</h3></div>
+                            <div class="card-content">
+                                <ul>
+                                    <li>Pull account data, contacts, deals, and health scores</li>
+                                    <li>Retrieve recent emails and send account plan summaries</li>
+                                    <li>Send notifications and updates to relevant channels (CSV-provided content)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="system-card" data-edit-key="workflow.instructions" data-edit-title="Instructions">
+                            <div class="card-header"><h3>Instructions</h3></div>
+                            <div class="card-content">
+                                <strong>Data Collection Phase</strong>
+                                <ul>
+                                    <li>Pull Airtable People.ai demo table (contacts, deals, health)</li>
+                                    <li>Mock-scan Gmail (last 30 days) related to the account</li>
+                                    <li>Gather call transcripts and meeting notes</li>
+                                    <li>Validate minimum data: 3+ emails, 1+ call</li>
+                                </ul>
+                                <strong>Account Plan Generation</strong>
+                                <ul>
+                                    <li>Calculate health score and status</li>
+                                    <li>Top 3 strategic recommendations with deadlines</li>
+                                    <li>Map key stakeholders and influence</li>
+                                    <li>Identify expansion opportunities and risks</li>
+                                    <li>Define clear next actions</li>
+                                </ul>
+                                <strong>Distribution Phase</strong>
+                                <ul>
+                                    <li>Email owner with subject: "Account Plan: [Account Name] - [Date]"</li>
+                                    <li>Update Airtable with health score, tasks, and next review (+7d)</li>
+                                    <li>Slack post to #dealflow; if health < 70, also #sales-alerts; else #account-planning</li>
+                                </ul>
+                                <strong>Error Handling</strong>
+                                <ul>
+                                    <li>Insufficient data: notify owner via Slack</li>
+                                    <li>System failures: retry once, then alert admin</li>
+                                    <li>Follow up in 48h if no response</li>
+                                </ul>
+                                <strong>Notes</strong>
+                                <ul>
+                                    <li>Health emojis: 🟢 (80+), 🟡 (60–79), 🔴 (<60)</li>
+                                    <li>Always include deadlines and prioritize expansion</li>
+                                    <li>Mock Gmail; Airtable scoped to People.ai demo table</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="system-card">
+                            <div class="card-header"><h3>Create Demo Workflow</h3></div>
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label>Workflow Name</label>
+                                    <input type="text" id="demoWorkflowName" value="Demo: Account Plan Orchestration">
+                                </div>
+                                <div class="form-group">
+                                    <label>Account</label>
+                                    <input type="text" id="demoWorkflowAccount" value="stripe">
+                                </div>
+                                <div class="form-group">
+                                    <label>Schedule (optional)</label>
+                                    <div id="demoMiniSchedulerPanel">
+                                        <input type="hidden" id="demoWorkflowSchedule" class="cron-input" value="">
+                                        <div class="mini-scheduler">
+                                            <div class="mini-row">
+                                                <label>Frequency</label>
+                                                <div class="segmented">
+                                                    <button type="button" class="seg" data-mode="weekly">Weekly</button>
+                                                    <button type="button" class="seg" data-mode="daily">Daily</button>
+                                                    <button type="button" class="seg" data-mode="hourly">Hourly</button>
+                                                </div>
+                                            </div>
+                                            <div class="mini-row time-row">
+                                                <label>Time</label>
+                                                <select class="time-select"></select>
+                                                <select class="tz-select">
+                                                    <option value="Local">Local</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
+                                            </div>
+                                            <div class="mini-row dow-row">
+                                                <label>Day</label>
+                                                <select class="dow-select">
+                                                    <option value="1">Monday</option>
+                                                    <option value="2">Tuesday</option>
+                                                    <option value="3">Wednesday</option>
+                                                    <option value="4">Thursday</option>
+                                                    <option value="5">Friday</option>
+                                                    <option value="6">Saturday</option>
+                                                    <option value="0">Sunday</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="mini-note"><small>Schedule is optional. Leave empty for manual runs.</small></div>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button class="secondary-button" id="createDemoWorkflowBtn"><i class="fas fa-plus"></i> Create</button>
+                                    <button class="primary-button" id="createAndRunDemoWorkflowBtn"><i class="fas fa-play"></i> Create & Run</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Workflow Modal -->
                 
-                <div class="config-grid">
-                    <div class="config-group">
-                        <label for="accountSelect">Account Selection</label>
-                        <select id="accountSelect" class="config-input">
-                            <option value="Stripe">Stripe (Recommended)</option>
-                            <option value="Acme Retail">Acme Retail</option>
-                            <option value="NorthStar Logistics">NorthStar Logistics</option>
-                            <option value="TechForward Solutions">TechForward Solutions</option>
-                            <option value="GlobalCorp Industries">GlobalCorp Industries</option>
-                        </select>
-                    </div>
-
-                    <div class="config-group">
-                        <label for="templateSelect">Email Template</label>
-                        <select id="templateSelect" class="config-input">
-                            <option value="default">Default (Complete Plan)</option>
-                            <option value="executive">Executive Summary</option>
-                            <option value="detailed">Detailed Analysis</option>
-                            <option value="summary">Quick Summary</option>
-                        </select>
-                    </div>
-
-                    <div class="config-group">
-                        <label for="recipientsList">Recipients (one per line)</label>
-                        <textarea id="recipientsList" class="config-input" rows="3" placeholder="demo@example.com&#10;manager@company.com&#10;executive@company.com">demo@example.com
-hello@joinfloor.app</textarea>
-                    </div>
-
-                    <div class="config-group">
-                        <label for="customSubject">Custom Subject (optional)</label>
-                        <input type="text" id="customSubject" class="config-input" placeholder="[DEMO] Account Plan: {accountName}">
+                <div class="modal" id="createWorkflowModal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Create New Workflow</h3>
+                            <button class="close-modal">&times;</button>
+                        </div>
+                        <form id="createWorkflowForm">
+                            <div class="form-group">
+                                <label>Workflow Name:</label>
+                                <input type="text" id="workflowName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Description:</label>
+                                <textarea id="workflowDescription"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Preset:</label>
+                                <select id="schedulePreset">
+                                    <option value="">Custom</option>
+                                    <option value="0 9 * * *">Daily at 09:00</option>
+                                    <option value="0 8 * * 1">Weekly Mon 08:00</option>
+                                    <option value="0 9 1 */3 *">Quarterly 1st 09:00</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Type:</label>
+                                <select id="scheduleType">
+                                    <option value="">Custom (Cron)</option>
+                                    <option value="hourly">Hourly</option>
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="scheduleBuilder" style="display:none;">
+                                <div id="builderHourly" style="display:none;">
+                                    <div>Runs every hour at :00</div>
+                                </div>
+                                <div id="builderDaily" style="display:none;">
+                                    <label>Time:</label>
+                                    <select id="scheduleHour"></select> : <select id="scheduleMinuteDaily"></select>
+                                </div>
+                                <div id="builderWeekly" style="display:none;">
+                                    <label>Day:</label>
+                                    <select id="scheduleDOW">
+                                        <option value="1">Mon</option>
+                                        <option value="2">Tue</option>
+                                        <option value="3">Wed</option>
+                                        <option value="4">Thu</option>
+                                        <option value="5">Fri</option>
+                                        <option value="6">Sat</option>
+                                        <option value="0">Sun</option>
+                                    </select>
+                                    <label style="margin-left:8px;">Time:</label>
+                                    <select id="scheduleHourWeekly"></select> : <select id="scheduleMinuteWeekly"></select>
+                                </div>
+                            </div>
+                            <input type="hidden" id="workflowSchedule">
+                            <div class="form-group">
+                                <label>Account Name:</label>
+                                <input type="text" id="workflowAccount" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="secondary-button cancel-btn">Cancel</button>
+                                <button type="submit" class="primary-button">Create Workflow</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
+            </div>
 
-                <div class="config-actions">
-                    <button id="validateBtn" class="btn btn-secondary">
-                        <i class="fas fa-check-circle"></i> Validate Configuration
-                    </button>
-                    <button id="executeBtn" class="btn btn-primary">
-                        <i class="fas fa-play"></i> Execute Workflow
-                    </button>
-                </div>
-            </section>
-
-            <!-- Execution Monitor -->
-            <section class="execution-panel" id="executionPanel" style="display: none;">
-                <h2><i class="fas fa-tasks"></i> Workflow Execution</h2>
-                
-                <div class="execution-progress">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressBar"></div>
+            <!-- Integration Tab -->
+            <div class="tab-content" id="integration-tab">
+                <div class="section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-puzzle-piece"></i> External Integrations</h2>
+                        <p>Manage connections to external data sources</p>
                     </div>
-                    <div class="progress-text" id="progressText">Ready to start...</div>
-                </div>
+                    
+                    <div class="integration-status" id="integrationDetails">
+                        <div class="loading">Loading integration details...</div>
+                    </div>
 
-                <div class="execution-steps" id="executionSteps">
-                    <!-- Steps will be populated dynamically -->
-                </div>
+                    <!-- People.ai Integration Spotlight -->
+                    <div class="section" style="margin-top: 1.5rem;">
+                        <div class="section-header">
+                            <h2><i class="fas fa-handshake"></i> People.ai Demo Configuration (Preview)</h2>
+                            <p>Configure People.ai demo flags for UI-only demonstration (no live connection)</p>
+                        </div>
 
-                <div class="execution-results" id="executionResults" style="display: none;">
-                    <!-- Results will be populated dynamically -->
-                </div>
-            </section>
-
-            <!-- System Status & Capabilities -->
-            <section class="status-panel">
-                <h2><i class="fas fa-server"></i> System Status</h2>
-                
-                <div class="status-grid">
-                    <div class="status-card" id="aiStatus">
-                        <div class="status-icon"><i class="fas fa-robot"></i></div>
-                        <div class="status-info">
-                            <h3>AI Services</h3>
-                            <p class="status-value" id="aiStatusValue">Checking...</p>
+                        <div class="partner-grid">
+                            <div class="partner-card">
+                                <div class="partner-header">
+                                    <div class="partner-title">
+                                        <span class="partner-badge">Demo Configuration</span>
+                                        <h3>
+                                            <span class="partner-logo"><img src="/static/img/logos/peopleai.jpg" alt="People.ai"></span>
+                                            People.ai Demo Configuration
+                                        </h3>
+                                        <p class="partner-sub">Contact auto-capture, activity intelligence, and coaching</p>
+                                    </div>
+                                    <div class="partner-actions">
+                                        <button class="secondary-button" id="peopleaiLearnMore" onclick="window.open('https://www.people.ai','_blank')">
+                                            <i class="fas fa-book-open"></i> Learn More
+                                        </button>
+                                        <button class="primary-button" id="openPeopleAIConfig">
+                                            <i class="fas fa-plug"></i> Configure (Preview)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="partner-body">
+                                    <div class="partner-features">
+                                        <div class="feature-item"><i class="fas fa-user-check"></i> Contact & Activity Auto-Capture</div>
+                                        <div class="feature-item"><i class="fas fa-chart-line"></i> Engagement Scores in Account Health</div>
+                                        <div class="feature-item"><i class="fas fa-lightbulb"></i> AI Coaching from Real Activity</div>
+                                        <div class="feature-item"><i class="fas fa-diagram-project"></i> Opportunity Hygiene Signals</div>
+                                        <div class="feature-item"><i class="fas fa-share-nodes"></i> Workflow Triggers from People.ai Signals</div>
+                                    </div>
+                                    <div class="partner-preview">
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Engagement Intelligence</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">C-suite coverage: 3/5 • Last 14d activity: High • Risky opps: 2</div>
+                                        </div>
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Coaching Insights</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">“Influencer missing on Decision Team for Expansion EU — add VP Ops.”</div>
+                                        </div>
+                                        <div class="preview-tile">
+                                            <div class="tile-title">Workflow Hooks</div>
+                                            <div class="tile-meta">Sample</div>
+                                            <div class="tile-content">Trigger weekly hygiene sweep → Slack summary + CRM tasks</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                    <div class="status-card" id="dataStatus">
-                        <div class="status-icon"><i class="fas fa-database"></i></div>
-                        <div class="status-info">
-                            <h3>Data Integration</h3>
-                            <p class="status-value" id="dataStatusValue">Checking...</p>
-                        </div>
-                    </div>
-
-                    <div class="status-card" id="emailStatus">
-                        <div class="status-icon"><i class="fas fa-envelope"></i></div>
-                        <div class="status-info">
-                            <h3>Email Distribution</h3>
-                            <p class="status-value" id="emailStatusValue">Checking...</p>
-                        </div>
-                    </div>
-
-                    <div class="status-card" id="workflowStatus">
-                        <div class="status-icon"><i class="fas fa-cogs"></i></div>
-                        <div class="status-info">
-                            <h3>Workflow Engine</h3>
-                            <p class="status-value" id="workflowStatusValue">Checking...</p>
-                        </div>
-                    </div>
                 </div>
-            </section>
-
-            <!-- Error Handling Display -->
-            <section class="error-panel" id="errorPanel" style="display: none;">
-                <h2><i class="fas fa-exclamation-triangle"></i> Error Details</h2>
-                <div class="error-content" id="errorContent"></div>
-                <div class="error-actions">
-                    <button id="retryBtn" class="btn btn-warning">
-                        <i class="fas fa-redo"></i> Retry
-                    </button>
-                    <button id="clearErrorBtn" class="btn btn-secondary">
-                        <i class="fas fa-times"></i> Clear
-                    </button>
-                </div>
-            </section>
-
-            <!-- Live Logs -->
-            <section class="logs-panel">
-                <div class="logs-header">
-                    <h2><i class="fas fa-terminal"></i> Live Execution Log</h2>
-                    <button id="clearLogsBtn" class="btn btn-small">Clear</button>
-                </div>
-                <div class="logs-content" id="logsContent">
-                    <div class="log-entry info">
-                        <span class="log-time">[READY]</span>
-                        <span class="log-message">AI Account Planner Demo Interface loaded successfully</span>
-                    </div>
-                </div>
-            </section>
+            </div>
         </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                <p>&copy; 2025 AI Account Planner - Demo Technical Exercise</p>
+                <div class="footer-links">
+                    <span>Powered by</span>
+                    <img src="/static/img/logos/redis.svg" alt="Redis" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>Redis</span>
+                    <span style="margin:0 8px;">•</span>
+                    <img src="/static/img/logos/openai.svg" alt="OpenAI" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>OpenAI</span>
+                    <span style="margin:0 8px;">+</span>
+                    <img src="/static/img/logos/anthropic.svg" alt="Anthropic" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <span>Anthropic</span>
+                </div>
+            </div>
+        </footer>
     </div>
 
-    <script src="/static/js/demo.js"></script>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Processing...</p>
+        </div>
+    </div>
+
+    <!-- People.ai Config Modal (Preview) -->
+    <div class="modal" id="peopleaiModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>People.ai Demo Configuration (Preview)</h3>
+                <button class="close-modal" id="closePeopleAIConfig">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Enable People.ai (Demo Mode)</label>
+                <input type="checkbox" id="peopleaiEnabled"> Enable demo widgets and workflow hooks (UI only)
+            </div>
+            <div class="form-group">
+                <label>Demo Toggles (UI only)</label>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureCapture"> Contact & Activity Auto-Capture</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureEngagement"> Engagement Score → Health Model</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureCoaching"> Coaching Insights → Daily Digest</label>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="peopleaiFeatureTriggers"> Workflow Triggers from People.ai Signals</label>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="secondary-button" id="peopleaiDocs" onclick="window.open('https://www.people.ai','_blank')"><i class="fas fa-external-link-alt"></i> Docs</button>
+                <button class="primary-button" id="savePeopleAIConfig"><i class="fas fa-save"></i> Save Demo Config</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+      // Simple Chat + Demo handlers (inline for dashboard)
+      (function(){
+        const box = id => document.getElementById(id);
+        if (box('chat_send')) {
+          const chat = [];
+          const add = (role, content) => {
+            chat.push({ role, content });
+            const b = box('chat_box');
+            const div = document.createElement('div');
+            div.textContent = role + ': ' + content;
+            div.style.color = role === 'user' ? '#7ee787' : '#9ccaff';
+            b.appendChild(div); b.scrollTop = b.scrollHeight;
+          };
+          const send = async () => {
+            const text = box('chat_input').value.trim();
+            if (!text) return; box('chat_input').value = '';
+            add('user', text);
+            const body = {
+              messages: chat,
+              system: box('chat_system').value.trim() || undefined,
+              provider: box('chat_provider').value,
+              modelName: box('chat_model').value.trim() || undefined,
+              useTools: box('chat_tools').value === 'true'
+            };
+            const res = await fetch('/settings/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            const j = await res.json();
+            add('assistant', j.reply || ('[error] ' + (j.error||'unknown')));
+          };
+          box('chat_send').onclick = send;
+          box('chat_input').addEventListener('keydown', e => { if (e.key==='Enter') send(); });
+        }
+
+        function distributorsFromUI(){
+          const arr=[];
+          if (box('slack_enable')?.checked) {
+            const channel = box('slack_channel').value.trim() || '#account-planning';
+            const format = box('slack_format').value || 'summary';
+            arr.push({ type:'slack', config:{ channels:[{channel}], format } });
+          }
+          if (box('email_enable')?.checked) {
+            const recs = (box('email_recipients').value||'').split(',').map(s=>s.trim()).filter(Boolean).map(email=>({email}));
+            arr.push({ type:'email', config:{ recipients: recs.length?recs:[{email:'demo@example.com'}], template: box('email_template').value||'executive', subject: box('email_subject').value||undefined } });
+          }
+          if (box('crm_enable')?.checked) {
+            const actions = Array.from(document.querySelectorAll('.crm_action:checked')).map(x=>x.value);
+            arr.push({ type:'crm', config:{ actions: actions.length?actions:['updateAccount'] } });
+          }
+          return arr;
+        }
+        function fmtMoney(n){ try { return '$'+Number(n||0).toLocaleString(); } catch(_){ return '$0'; } }
+        function pct(n){ const v = Math.round((Number(n||0))*100); return isNaN(v)?0:v; }
+        function badge(text, cls=''){ return `<span class="tag ${cls}">${text}</span>`; }
+        function renderPlan(plan){
+          const c = box('demo_plan');
+          if (!plan || typeof plan !== 'object') { c.textContent = 'No plan'; return; }
+          const h = plan.accountOverview?.healthScore?.score ?? plan.accountOverview?.healthScore?.overallScore;
+          const health = typeof h === 'number' ? h : 0;
+          const opps = plan.opportunityAnalysis?.identifiedOpportunities || [];
+          const risks = plan.riskAssessment?.identifiedRisks || [];
+          const recs = plan.strategicRecommendations || {};
+          const highlights = plan.executiveSummary?.keyHighlights || [];
+          const stakeholders = (plan.stakeholderMap?.keyRelationships || []).slice(0,6);
+
+          c.innerHTML = `
+            <div class="plan">
+              <div class="system-grid">
+                <div class="system-card">
+                  <div class="card-header"><strong>Executive Summary</strong></div>
+                  <div class="card-content">
+                    <div>${plan.executiveSummary?.overview || '—'}</div>
+                    <div style="margin-top:8px">${highlights.map(h=>badge(h)).join(' ')}</div>
+                  </div>
+                </div>
+                <div class="system-card">
+                  <div class="card-header"><strong>Health</strong></div>
+                  <div class="card-content">
+                    <div style="display:flex;align-items:center;gap:12px">
+                      <div style="font-size:28px;font-weight:700">${health}/100</div>
+                      <div style="flex:1;height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:${Math.min(100,Math.max(0,health))}%;height:100%;background:${health>=80?'#28a745':health>=60?'#ffc107':'#dc3545'}"></div></div>
+                    </div>
+                    <div class="small" style="margin-top:6px">Relationship: ${plan.accountOverview?.relationshipHealth || '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="system-grid">
+                <div class="system-card">
+                  <div class="card-header"><strong>Opportunities (${opps.length})</strong></div>
+                  <div class="card-content">
+                    ${opps.slice(0,5).map(o=>`
+                      <div class="list-item">
+                        <div style="display:flex;justify-content:space-between;gap:12px">
+                          <div><strong>${(o.title||o.type||'Opportunity')}</strong> ${o.timeline?badge(o.timeline,''):''}</div>
+                          <div>${fmtMoney(o.value)} • ${pct(o.confidence)}%</div>
+                        </div>
+                        <div class="small">${o.reasoning || o.description || ''}</div>
+                      </div>
+                    `).join('') || '—'}
+                  </div>
+                </div>
+                <div class="system-card">
+                  <div class="card-header"><strong>Risks (${risks.length})</strong></div>
+                  <div class="card-content">
+                    ${risks.slice(0,5).map(r=>`
+                      <div class="list-item">
+                        <div style="display:flex;justify-content:space-between;gap:12px">
+                          <div><strong>${r.type||'Risk'}</strong></div>
+                          <div class="small">${(r.level||r.impact||'').toString()}</div>
+                        </div>
+                        <div class="small">${r.description||''}</div>
+                      </div>
+                    `).join('') || '—'}
+                  </div>
+                </div>
+              </div>
+
+              <div class="system-grid">
+                <div class="system-card">
+                  <div class="card-header"><strong>Recommendations</strong></div>
+                  <div class="card-content">
+                    <div><strong>Immediate</strong></div>
+                    <ul>${(recs.immediate||[]).slice(0,3).map(a=>`<li>${a.action||a} ${a.timeline?badge(a.timeline):''}</li>`).join('')||'<li>—</li>'}</ul>
+                    <div><strong>Short Term</strong></div>
+                    <ul>${(recs.shortTerm||[]).slice(0,3).map(a=>`<li>${a.action||a}</li>`).join('')||'<li>—</li>'}</ul>
+                  </div>
+                </div>
+                <div class="system-card">
+                  <div class="card-header"><strong>Stakeholders</strong></div>
+                  <div class="card-content">
+                    ${stakeholders.length?`<table class="table"><thead><tr><th>Name</th><th>Role</th><th>Strength</th></tr></thead><tbody>
+                      ${stakeholders.map(s=>`<tr><td>${s.name||'—'}</td><td>${s.role||'—'}</td><td>${s.strength||s.relationshipStrength||'—'}</td></tr>`).join('')}
+                    </tbody></table>`:'—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        async function runDemo(distribute){
+          const accountName = box('demo_account').value.trim() || 'stripe';
+          const instructions = box('demo_instructions').value.trim() || 'Be concise and executive-ready.';
+          const provider = box('demo_provider').value;
+          const modelName = (box('demo_model').value||'').trim() || undefined;
+          const distributors = distribute?distributorsFromUI():[];
+          const res = await fetch('/instructor/run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accountName, instructions, provider, modelName, distributors }) });
+          const j = await res.json();
+          const raw = JSON.stringify(j.plan||j, null, 2);
+          box('demo_plan').dataset.raw = raw;
+          try { renderPlan(j.plan||j); } catch(_){ box('demo_plan').textContent = raw; }
+          if (distribute) box('demo_dist').textContent = JSON.stringify(j.distributionResults||{}, null, 2);
+        }
+        if (box('demo_generate')) box('demo_generate').onclick = () => runDemo(false);
+        if (box('demo_distribute')) box('demo_distribute').onclick = () => runDemo(true);
+
+        async function saveWorkflow(enableSchedule) {
+          const accountName = box('demo_account').value.trim() || 'stripe';
+          const distributors = distributorsFromUI();
+          const cron = (box('demo_cron')?.value || '').trim();
+          const trigger = (enableSchedule && cron) ? { type:'schedule' } : { type:'manual' };
+          const wf = {
+            name: `Demo: ${accountName}`,
+            description: 'Demo workflow created from Chat & Demo page',
+            trigger,
+            schedule: (trigger.type==='schedule') ? cron : undefined,
+            accounts: [{ accountName }],
+            distributors,
+            enabled: true,
+            engine: 'internal'
+          };
+          const res = await fetch('/workflows', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(wf) });
+          const j = await res.json();
+          if (j?.workflow?.id) {
+            alert(`Workflow saved${trigger.type==='schedule' ? ' and scheduled' : ''}. ID: ${j.workflow.id}`);
+          } else {
+            alert('Failed to save workflow: ' + (j.error || 'unknown'));
+          }
+        }
+        if (box('demo_save_workflow')) box('demo_save_workflow').onclick = () => saveWorkflow(false);
+        if (box('demo_save_enable')) box('demo_save_enable').onclick = () => saveWorkflow(true);
+
+        // Copy / Download plan JSON
+        function currentPlanJSON(){
+          try {
+            const pre = document.createElement('pre');
+            pre.textContent = box('demo_plan').dataset.raw || '';
+            return box('demo_plan').dataset.raw || '';
+          } catch(_) { return ''; }
+        }
+        if (box('btnCopyPlan')) box('btnCopyPlan').onclick = async () => {
+          const text = box('demo_plan').dataset.raw || box('demo_plan').textContent || '';
+          try { await navigator.clipboard.writeText(text); alert('Plan JSON copied'); } catch(e){ alert('Copy failed: '+e.message); }
+        };
+        if (box('btnDownloadPlan')) box('btnDownloadPlan').onclick = () => {
+          const text = box('demo_plan').dataset.raw || box('demo_plan').textContent || '';
+          const blob = new Blob([text], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'account-plan.json'; a.click(); URL.revokeObjectURL(url);
+        };
+      })();
+    </script>
 </body>
 </html>
