@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Account Planner - Demo Dashboard</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
@@ -53,11 +53,11 @@
                                     <select id="chat_provider" class="hidden"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
                                     <div class="provider-choices" id="chat_provider_cards" style="margin-top:6px;">
                                         <button type="button" class="provider-card" data-provider="openai">
-                                            <img src="/static/img/models/openai.png" alt="OpenAI">
+                                            <img src="/img/models/openai.png" alt="OpenAI">
                                             <span class="provider-name">OpenAI</span>
                                         </button>
                                         <button type="button" class="provider-card" data-provider="anthropic">
-                                            <img src="/static/img/models/claude.svg" alt="Anthropic">
+                                            <img src="/img/models/claude.svg" alt="Anthropic">
                                             <span class="provider-name">Anthropic</span>
                                         </button>
                                         <button type="button" class="provider-card" data-provider="mixed">
@@ -108,11 +108,11 @@
                                     </select>
                                     <div class="provider-choices" id="aiProviderChips">
                                         <button type="button" class="provider-card" data-provider="openai">
-                                            <img src="/static/img/logos/openai.svg" alt="OpenAI">
+                                            <img src="/img/logos/openai.svg" alt="OpenAI">
                                             <span class="provider-name">OpenAI</span>
                                         </button>
                                         <button type="button" class="provider-card" data-provider="anthropic">
-                                            <img src="/static/img/logos/anthropic.svg" alt="Anthropic">
+                                            <img src="/img/logos/anthropic.svg" alt="Anthropic">
                                             <span class="provider-name">Anthropic</span>
                                         </button>
                                         <button type="button" class="provider-card" data-provider="mixed">
@@ -185,27 +185,27 @@
                                     <div class="mcp-grid">
                                         <label class="mcp-toggle">
                                             <input type="checkbox" id="mcpGmail" />
-                                            <img src="/static/img/logos/gmail.svg" alt="Gmail">
+                                            <img src="/img/logos/gmail.svg" alt="Gmail">
                                             <span class="mcp-name">Gmail</span>
                                         </label>
                                         <label class="mcp-toggle">
                                             <input type="checkbox" id="mcpCalendar" />
-                                            <img src="/static/img/logos/googlecalendar.svg" alt="Google Calendar">
+                                            <img src="/img/logos/googlecalendar.svg" alt="Google Calendar">
                                             <span class="mcp-name">Google Calendar</span>
                                         </label>
                                         <label class="mcp-toggle">
                                             <input type="checkbox" id="mcpDrive" />
-                                            <img src="/static/img/logos/googledrive.svg" alt="Google Drive">
+                                            <img src="/img/logos/googledrive.svg" alt="Google Drive">
                                             <span class="mcp-name">Google Drive</span>
                                         </label>
                                         <label class="mcp-toggle">
                                             <input type="checkbox" id="mcpSlack" />
-                                            <img src="/static/img/logos/slack.svg" alt="Slack">
+                                            <img src="/img/logos/slack.svg" alt="Slack">
                                             <span class="mcp-name">Slack</span>
                                         </label>
                                         <label class="mcp-toggle">
                                             <input type="checkbox" id="mcpNotion" />
-                                            <img src="/static/img/logos/notion.svg" alt="Notion">
+                                            <img src="/img/logos/notion.svg" alt="Notion">
                                             <span class="mcp-name">Notion</span>
                                         </label>
                                     </div>
@@ -490,7 +490,7 @@
                                     <div class="partner-title">
                                         <span class="partner-badge">Demo Configuration</span>
                                         <h3>
-                                            <span class="partner-logo"><img src="/static/img/logos/peopleai.jpg" alt="People.ai"></span>
+                                            <span class="partner-logo"><img src="/img/logos/peopleai.jpg" alt="People.ai"></span>
                                             People.ai Demo Configuration
                                         </h3>
                                         <p class="partner-sub">Contact auto-capture, activity intelligence, and coaching</p>
@@ -563,13 +563,13 @@
                 <p>&copy; 2025 AI Account Planner - Demo Technical Exercise</p>
                 <div class="footer-links">
                     <span>Powered by</span>
-                    <img src="/static/img/logos/redis.svg" alt="Redis" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <img src="/img/logos/redis.svg" alt="Redis" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
                     <span>Redis</span>
                     <span style="margin:0 8px;">•</span>
-                    <img src="/static/img/logos/openai.svg" alt="OpenAI" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <img src="/img/logos/openai.svg" alt="OpenAI" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
                     <span>OpenAI</span>
                     <span style="margin:0 8px;">+</span>
-                    <img src="/static/img/logos/anthropic.svg" alt="Anthropic" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
+                    <img src="/img/logos/anthropic.svg" alt="Anthropic" style="width:18px;height:18px;vertical-align:middle;margin:0 6px;"/>
                     <span>Anthropic</span>
                 </div>
             </div>
@@ -617,7 +617,7 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js"></script>
+    <script src="/js/dashboard.js"></script>
     <script>
       // Simple Chat + Demo handlers (inline for dashboard)
       (function(){
