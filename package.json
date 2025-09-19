@@ -24,6 +24,7 @@
     "lint": "eslint src/",
     "typecheck": "node --check src/**/*.js",
     "validate": "npm run typecheck && npm run lint && npm test",
+    "vercel-build": "echo 'Node.js build complete'",
     "validate:data": "node scripts/validate-data.js",
     "validate:plan": "node scripts/validate-plan.js",
     "validate:citations": "node scripts/validate-citations.js",
