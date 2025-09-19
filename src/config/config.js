@@ -1,7 +1,9 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-dotenv.config();
+// Ensure .env values take precedence over any pre-exported shell vars
+// This avoids cases where placeholder keys exported in the shell shadow your .env
+dotenv.config({ override: true });
 
 // Load optional settings overrides from data/settings.json
 function loadSettingsFile() {
@@ -33,6 +35,31 @@ function deepMerge(target, source) {
   return target;
 }
 
+function parseJSONEnv(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    // Allow simple key:value,key:value fallback syntax
+    const entries = value.split(',').map(pair => pair.trim()).filter(Boolean);
+    if (entries.length === 0) return fallback;
+    const parsed = {};
+    for (const entry of entries) {
+      const [k, v] = entry.split(':');
+      if (k && v) parsed[k.trim()] = v.trim();
+    }
+    return Object.keys(parsed).length > 0 ? parsed : fallback;
+  }
+}
+
+function parseStringSetEnv(value) {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   // Application settings
   app: {
@@ -45,6 +72,7 @@ export const config = {
   mcp: {
     enabled: process.env.MCP_ENABLED === 'true',
     klavisApiKey: process.env.KLAVIS_API_KEY,
+    userId: process.env.MCP_USER_ID,
     timeout: parseInt(process.env.MCP_TIMEOUT) || 30000,
     retryAttempts: parseInt(process.env.MCP_RETRY_ATTEMPTS) || 3,
     
@@ -85,11 +113,51 @@ export const config = {
       defaultTimeout: parseInt(process.env.MCP_TOOL_TIMEOUT) || 30000
     },
 
+    rateLimits: {
+      default: {
+        perMinute: parseInt(process.env.MCP_RATE_LIMIT_PER_MINUTE) || 60,
+        perHour: parseInt(process.env.MCP_RATE_LIMIT_PER_HOUR) || 1000,
+        perDay: parseInt(process.env.MCP_RATE_LIMIT_PER_DAY) || 20000,
+        maxConcurrent: parseInt(process.env.MCP_RATE_LIMIT_MAX_CONCURRENT) || 1
+      },
+      servers: {
+        gmail: {
+          perMinute: process.env.MCP_GMAIL_RATE_LIMIT_PER_MINUTE ? parseInt(process.env.MCP_GMAIL_RATE_LIMIT_PER_MINUTE) : undefined,
+          perHour: process.env.MCP_GMAIL_RATE_LIMIT_PER_HOUR ? parseInt(process.env.MCP_GMAIL_RATE_LIMIT_PER_HOUR) : undefined,
+          perDay: process.env.MCP_GMAIL_RATE_LIMIT_PER_DAY ? parseInt(process.env.MCP_GMAIL_RATE_LIMIT_PER_DAY) : undefined
+        },
+        google_calendar: {
+          perMinute: process.env.MCP_CALENDAR_RATE_LIMIT_PER_MINUTE ? parseInt(process.env.MCP_CALENDAR_RATE_LIMIT_PER_MINUTE) : undefined,
+          perHour: process.env.MCP_CALENDAR_RATE_LIMIT_PER_HOUR ? parseInt(process.env.MCP_CALENDAR_RATE_LIMIT_PER_HOUR) : undefined,
+          perDay: process.env.MCP_CALENDAR_RATE_LIMIT_PER_DAY ? parseInt(process.env.MCP_CALENDAR_RATE_LIMIT_PER_DAY) : undefined
+        },
+        google_drive: {
+          perMinute: process.env.MCP_DRIVE_RATE_LIMIT_PER_MINUTE ? parseInt(process.env.MCP_DRIVE_RATE_LIMIT_PER_MINUTE) : undefined,
+          perHour: process.env.MCP_DRIVE_RATE_LIMIT_PER_HOUR ? parseInt(process.env.MCP_DRIVE_RATE_LIMIT_PER_HOUR) : undefined,
+          perDay: process.env.MCP_DRIVE_RATE_LIMIT_PER_DAY ? parseInt(process.env.MCP_DRIVE_RATE_LIMIT_PER_DAY) : undefined
+        },
+        slack: {
+          perMinute: process.env.MCP_SLACK_RATE_LIMIT_PER_MINUTE ? parseInt(process.env.MCP_SLACK_RATE_LIMIT_PER_MINUTE) : undefined,
+          perHour: process.env.MCP_SLACK_RATE_LIMIT_PER_HOUR ? parseInt(process.env.MCP_SLACK_RATE_LIMIT_PER_HOUR) : undefined,
+          perDay: process.env.MCP_SLACK_RATE_LIMIT_PER_DAY ? parseInt(process.env.MCP_SLACK_RATE_LIMIT_PER_DAY) : undefined
+        },
+        notion: {
+          perMinute: process.env.MCP_NOTION_RATE_LIMIT_PER_MINUTE ? parseInt(process.env.MCP_NOTION_RATE_LIMIT_PER_MINUTE) : undefined,
+          perHour: process.env.MCP_NOTION_RATE_LIMIT_PER_HOUR ? parseInt(process.env.MCP_NOTION_RATE_LIMIT_PER_HOUR) : undefined,
+          perDay: process.env.MCP_NOTION_RATE_LIMIT_PER_DAY ? parseInt(process.env.MCP_NOTION_RATE_LIMIT_PER_DAY) : undefined
+        }
+      }
+    },
+
     // OAuth configurations
     oauth: {
       redirectUri: process.env.MCP_OAUTH_REDIRECT_URI || 'http://localhost:3000/auth/callback',
       stateSecret: process.env.MCP_OAUTH_STATE_SECRET || 'your-state-secret',
       tokenStorage: process.env.MCP_TOKEN_STORAGE || 'file' // 'file' or 'database'
+    },
+
+    tokenRefresh: {
+      bufferSeconds: parseInt(process.env.MCP_TOKEN_REFRESH_BUFFER) || 120
     }
   },
 
@@ -146,7 +214,50 @@ export const config = {
     cacheEnabled: process.env.DATA_CACHE_ENABLED !== 'false',
     cacheDuration: parseInt(process.env.DATA_CACHE_DURATION) || 3600000, // 1 hour in ms
     batchSize: parseInt(process.env.DATA_BATCH_SIZE) || 100,
-    maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 10
+    maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 10,
+    pipeline: {
+      qualityThreshold: parseFloat(process.env.DATA_PIPELINE_QUALITY_THRESHOLD) || 0.75,
+      recencyToleranceMs: parseInt(process.env.DATA_PIPELINE_RECENCY_MS) || 30_000,
+      persistToPostgres: process.env.DATA_PIPELINE_PERSIST_TO_POSTGRES !== 'false',
+      sourcePriority: process.env.DATA_PIPELINE_SOURCE_PRIORITY
+        ? process.env.DATA_PIPELINE_SOURCE_PRIORITY.split(',').map(s => s.trim()).filter(Boolean)
+        : ['klavis', 'sample', 'news', 'external'],
+      realtime: {
+        enabled: process.env.DATA_PIPELINE_REALTIME_ENABLED !== 'false',
+        intervalMs: parseInt(process.env.DATA_PIPELINE_REALTIME_INTERVAL_MS) || 60_000,
+        warmupMs: parseInt(process.env.DATA_PIPELINE_REALTIME_WARMUP_MS) || 5_000
+      }
+    }
+  },
+
+  // CRM distribution defaults and task orchestration
+  crm: {
+    enabled: process.env.CRM_ENABLED !== 'false',
+    type: process.env.CRM_TYPE || 'salesforce',
+    defaultOwnerId: process.env.CRM_TASK_DEFAULT_OWNER_ID || null,
+    fallbackOwnerId: process.env.CRM_TASK_FALLBACK_OWNER_ID || null,
+    escalationOwnerId: process.env.CRM_TASK_ESCALATION_OWNER_ID || null,
+    ownerMappings: parseJSONEnv(process.env.CRM_TASK_OWNER_MAP),
+    priorityMappings: parseJSONEnv(process.env.CRM_TASK_PRIORITY_MAP),
+    statusMappings: parseJSONEnv(process.env.CRM_TASK_STATUS_MAP),
+    defaultPriority: process.env.CRM_TASK_DEFAULT_PRIORITY || 'Medium',
+    defaultStatus: process.env.CRM_TASK_DEFAULT_STATUS || 'Not Started',
+    defaultType: process.env.CRM_TASK_DEFAULT_TYPE || 'AI Generated Task',
+    escalation: {
+      enabled: process.env.CRM_TASK_ESCALATION_ENABLED === 'true',
+      threshold: process.env.CRM_TASK_ESCALATION_THRESHOLD || 'High',
+      ownerId: process.env.CRM_TASK_ESCALATION_OWNER_ID || null,
+      notify: parseStringSetEnv(process.env.CRM_TASK_ESCALATION_NOTIFY)
+    },
+    verification: {
+      enabled: process.env.CRM_TASK_VERIFICATION_ENABLED !== 'false',
+      maxAttempts: parseInt(process.env.CRM_TASK_VERIFICATION_ATTEMPTS) || 1,
+      delayMs: parseInt(process.env.CRM_TASK_VERIFICATION_DELAY_MS) || 2000
+    },
+    dependency: {
+      autoLinkPhases: process.env.CRM_TASK_AUTO_LINK_PHASES === 'true'
+    },
+    progressTTLSeconds: parseInt(process.env.CRM_TASK_PROGRESS_TTL) || 604800 // 7 days
   },
 
   // Logging configuration
@@ -155,6 +266,55 @@ export const config = {
     enableConsole: process.env.LOG_CONSOLE_ENABLED !== 'false',
     enableFile: process.env.LOG_FILE_ENABLED === 'true' || false,
     filePath: process.env.LOG_FILE_PATH || './logs/app.log'
+  },
+
+  // Monitoring & alerting configuration
+  monitoring: {
+    pollInterval: parseInt(process.env.MONITORING_POLL_INTERVAL_MS) || 30000,
+    defaultSlaTarget: parseFloat(process.env.MONITORING_DEFAULT_SLA_TARGET || '0.995'),
+    alerting: {
+      slackWebhook: process.env.ALERT_SLACK_WEBHOOK,
+      emailRecipients: parseStringSetEnv(process.env.ALERT_EMAIL_RECIPIENTS),
+      emailFrom: process.env.ALERT_EMAIL_FROM || process.env.SMTP_FROM,
+      minRepeatMinutes: parseInt(process.env.ALERT_SUPPRESS_MINUTES) || 15
+    },
+    performance: {
+      latencyP95Target: parseInt(process.env.PERF_LATENCY_P95_TARGET_MS) || 5000,
+      latencyP99Target: parseInt(process.env.PERF_LATENCY_P99_TARGET_MS) || 10000,
+      errorRateTarget: parseFloat(process.env.PERF_ERROR_RATE_TARGET || '0.01')
+    }
+  },
+
+  reminders: {
+    enabled: process.env.REMINDERS_ENABLED !== 'false',
+    evaluationIntervalMs: parseInt(process.env.REMINDER_EVALUATION_INTERVAL_MS) || 60000,
+    defaultSlackChannel: process.env.REMINDER_DEFAULT_SLACK_CHANNEL || '#account-health',
+    escalationSlackChannel: process.env.REMINDER_ESCALATION_SLACK_CHANNEL || '#sales-leadership',
+    defaultMentions: parseStringSetEnv(process.env.REMINDER_SLACK_MENTIONS),
+    escalationMentions: parseStringSetEnv(process.env.REMINDER_ESCALATION_MENTIONS),
+    defaultEmailRecipients: parseStringSetEnv(process.env.REMINDER_DEFAULT_EMAIL || 'account-team@example.com'),
+    escalationEmailRecipients: parseStringSetEnv(process.env.REMINDER_ESCALATION_EMAIL || ''),
+    maxEscalations: parseInt(process.env.REMINDER_MAX_ESCALATIONS) || 2,
+    storagePath: process.env.REMINDER_STORAGE_PATH,
+    thresholds: {
+      critical: parseFloat(process.env.REMINDER_THRESHOLD_CRITICAL) || 40,
+      high: parseFloat(process.env.REMINDER_THRESHOLD_HIGH) || 60,
+      medium: parseFloat(process.env.REMINDER_THRESHOLD_MEDIUM) || 75
+    },
+    timings: {
+      critical: {
+        dueMinutes: parseInt(process.env.REMINDER_CRITICAL_DUE_MINUTES) || 60,
+        escalationMinutes: parseInt(process.env.REMINDER_CRITICAL_ESCALATION_MINUTES) || 120
+      },
+      high: {
+        dueMinutes: parseInt(process.env.REMINDER_HIGH_DUE_MINUTES) || 240,
+        escalationMinutes: parseInt(process.env.REMINDER_HIGH_ESCALATION_MINUTES) || 480
+      },
+      medium: {
+        dueMinutes: parseInt(process.env.REMINDER_MEDIUM_DUE_MINUTES) || 1440,
+        escalationMinutes: parseInt(process.env.REMINDER_MEDIUM_ESCALATION_MINUTES) || 2880
+      }
+    }
   },
 
   // Account planning specific settings

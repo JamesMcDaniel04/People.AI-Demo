@@ -146,10 +146,10 @@ The system currently includes a complete example for Stripe as a target account,
 - Perfect for testing and demonstration
 
 ### MCP Integration (Configurable)
-- Email system integration
-- Calendar data access
-- CRM system connections
-- Document repository access
+- Real OAuth handshake via `GET /auth/klavis/start?server=<provider>` (append `mode=redirect` to jump straight to consent). Klavis calls back to `/auth/klavis/callback`, which stores the instance credentials safely on disk.
+- Built-in quota guardrails controlled with `MCP_RATE_LIMIT_*` and per-provider overrides (e.g., `MCP_GMAIL_RATE_LIMIT_PER_MINUTE`).
+- Automatic token refresh with `MCP_TOKEN_REFRESH_BUFFER` so long-running workflows never hit expired access tokens mid-execution.
+- Email, calendar, drive, Slack, and Notion connectors now surface tool availability per model (`openai`/`claude`) in `/integration/status` for quick verification.
 
 ### External API Integration (Configurable)
 - Company news and market data

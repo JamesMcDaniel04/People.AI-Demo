@@ -143,6 +143,38 @@ export class PostgresService {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Data ingestion audit log
+        CREATE TABLE IF NOT EXISTS data_ingestion_events (
+          id BIGSERIAL PRIMARY KEY,
+          account_name VARCHAR(255) NOT NULL,
+          source VARCHAR(255) NOT NULL,
+          record_type VARCHAR(100),
+          record_identifier VARCHAR(255),
+          action VARCHAR(100),
+          status VARCHAR(50) NOT NULL,
+          reason TEXT,
+          quality_score DECIMAL(4,3),
+          conflict_with TEXT[],
+          errors JSONB,
+          metadata JSONB,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Data lineage tracking
+        CREATE TABLE IF NOT EXISTS data_lineage (
+          id BIGSERIAL PRIMARY KEY,
+          account_name VARCHAR(255) NOT NULL,
+          record_type VARCHAR(100) NOT NULL,
+          record_identifier VARCHAR(255) NOT NULL,
+          source VARCHAR(255) NOT NULL,
+          version INTEGER NOT NULL DEFAULT 1,
+          checksum VARCHAR(255),
+          payload JSONB,
+          metadata JSONB,
+          ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         -- Create indexes for better performance
         CREATE INDEX IF NOT EXISTS idx_stakeholders_account_id ON stakeholders(account_id);
         CREATE INDEX IF NOT EXISTS idx_interactions_account_id ON interactions(account_id);
@@ -152,11 +184,273 @@ export class PostgresService {
         CREATE INDEX IF NOT EXISTS idx_opportunities_account_id ON opportunities(account_id);
         CREATE INDEX IF NOT EXISTS idx_risks_account_id ON risks(account_id);
         CREATE INDEX IF NOT EXISTS idx_accounts_name ON accounts(name);
+        CREATE INDEX IF NOT EXISTS idx_data_ingestion_account ON data_ingestion_events(account_name);
+        CREATE INDEX IF NOT EXISTS idx_data_ingestion_source ON data_ingestion_events(source);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_data_lineage_unique ON data_lineage(account_name, record_type, record_identifier);
       `;
 
       await client.query(createTablesSQL);
       this.logger.info('✅ PostgreSQL schema initialized');
 
+    } finally {
+      client.release();
+    }
+  }
+
+  async healthCheck() {
+    if (!this.pool) {
+      return { status: 'disconnected', connected: false, error: 'Pool not initialized' };
+    }
+
+    try {
+      const start = Date.now();
+      const client = await this.pool.connect();
+      await client.query('SELECT 1');
+      client.release();
+      return {
+        status: 'connected',
+        connected: true,
+        latencyMs: Date.now() - start
+      };
+    } catch (error) {
+      this.logger.error('Postgres health check failed', { error: error.message });
+      return {
+        status: 'error',
+        connected: false,
+        error: error.message
+      };
+    }
+  }
+
+  async recordIngestionEvent(event) {
+    if (!this.connected) {
+      return null;
+    }
+
+    const {
+      accountName,
+      source,
+      recordType = null,
+      recordIdentifier = null,
+      action = null,
+      status = 'success',
+      reason = null,
+      qualityScore = null,
+      conflictWith = null,
+      errors = null,
+      metadata = {}
+    } = event;
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query(`
+        INSERT INTO data_ingestion_events
+          (account_name, source, record_type, record_identifier, action, status, reason, quality_score, conflict_with, errors, metadata)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [
+        accountName,
+        source,
+        recordType,
+        recordIdentifier,
+        action,
+        status,
+        reason,
+        qualityScore,
+        conflictWith,
+        errors ? JSON.stringify(errors) : null,
+        metadata ? JSON.stringify(metadata) : null
+      ]);
+      return true;
+    } catch (error) {
+      this.logger.warn('Failed to record ingestion event', {
+        accountName,
+        source,
+        error: error.message
+      });
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
+  async upsertDataLineage(entry) {
+    if (!this.connected) {
+      return null;
+    }
+
+    const {
+      accountName,
+      recordType,
+      recordIdentifier,
+      source,
+      checksum = null,
+      payload = {},
+      metadata = {}
+    } = entry;
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query(`
+        INSERT INTO data_lineage
+          (account_name, record_type, record_identifier, source, checksum, payload, metadata)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (account_name, record_type, record_identifier)
+        DO UPDATE SET
+          source = EXCLUDED.source,
+          checksum = EXCLUDED.checksum,
+          payload = EXCLUDED.payload,
+          metadata = EXCLUDED.metadata,
+          version = data_lineage.version + 1,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        accountName,
+        recordType,
+        recordIdentifier,
+        source,
+        checksum,
+        JSON.stringify(payload || {}),
+        JSON.stringify(metadata || {})
+      ]);
+      return true;
+    } catch (error) {
+      this.logger.warn('Failed to upsert data lineage', {
+        accountName,
+        recordType,
+        recordIdentifier,
+        error: error.message
+      });
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getPipelineAuditSummary(options = {}) {
+    if (!this.connected) {
+      return null;
+    }
+
+    const {
+      sinceMinutes = 60,
+      recentLimit = 25
+    } = options;
+
+    const client = await this.pool.connect();
+
+    try {
+      const statusCounts = await client.query(`
+        SELECT status, COUNT(*)::int AS count
+        FROM data_ingestion_events
+        WHERE created_at >= NOW() - (INTERVAL '1 minute' * $1)
+        GROUP BY status
+      `, [sinceMinutes]);
+
+      const providerCounts = await client.query(`
+        SELECT source, COUNT(*)::int AS count
+        FROM data_ingestion_events
+        WHERE created_at >= NOW() - (INTERVAL '1 minute' * $1)
+        GROUP BY source
+        ORDER BY count DESC
+        LIMIT 10
+      `, [sinceMinutes]);
+
+      const qualityStats = await client.query(`
+        SELECT
+          AVG(quality_score) AS avg_quality,
+          MIN(quality_score) AS min_quality,
+          MAX(quality_score) AS max_quality
+        FROM data_ingestion_events
+        WHERE quality_score IS NOT NULL
+          AND created_at >= NOW() - (INTERVAL '1 minute' * $1)
+      `, [sinceMinutes]);
+
+      const conflictStats = await client.query(`
+        SELECT
+          record_type,
+          SUM(COALESCE((metadata->>'conflictCount')::int, 0))::int AS conflicts
+        FROM data_ingestion_events
+        WHERE action = 'conflict_resolution'
+          AND created_at >= NOW() - (INTERVAL '1 minute' * $1)
+        GROUP BY record_type
+        ORDER BY conflicts DESC
+        LIMIT 10
+      `, [sinceMinutes]);
+
+      const recentEvents = await client.query(`
+        SELECT
+          account_name AS "accountName",
+          source,
+          record_type AS "recordType",
+          status,
+          quality_score AS "qualityScore",
+          metadata,
+          created_at AS "createdAt"
+        FROM data_ingestion_events
+        ORDER BY created_at DESC
+        LIMIT $2
+      `, [sinceMinutes, recentLimit]);
+
+      const lineageTotals = await client.query(`
+        SELECT
+          record_type AS "recordType",
+          COUNT(*)::int AS "totalRecords",
+          COUNT(DISTINCT source) AS "sources"
+        FROM data_lineage
+        GROUP BY record_type
+        ORDER BY "totalRecords" DESC
+        LIMIT 10
+      `);
+
+      const statusMap = Object.fromEntries(statusCounts.rows.map(row => [row.status, Number(row.count)]));
+      const status = statusMap.failed > 0 ? 'failed'
+        : statusMap.warning > 0 ? 'warning'
+        : 'ok';
+
+      const qualityRow = qualityStats.rows[0] || {};
+
+      return {
+        source: 'postgres',
+        generatedAt: new Date().toISOString(),
+        lookbackMinutes: sinceMinutes,
+        status,
+        statusCounts: statusMap,
+        providerCounts: providerCounts.rows.map(row => ({
+          source: row.source,
+          count: Number(row.count)
+        })),
+        quality: {
+          average: qualityRow.avg_quality !== null ? Number(qualityRow.avg_quality) : null,
+          min: qualityRow.min_quality !== null ? Number(qualityRow.min_quality) : null,
+          max: qualityRow.max_quality !== null ? Number(qualityRow.max_quality) : null
+        },
+        conflictByDomain: conflictStats.rows.map(row => ({
+          recordType: row.record_type,
+          conflicts: Number(row.conflicts)
+        })),
+        recentEvents: recentEvents.rows.map(row => ({
+          accountName: row.accountName,
+          source: row.source,
+          recordType: row.recordType,
+          status: row.status,
+          qualityScore: row.qualityScore !== null ? Number(row.qualityScore) : null,
+          metadata: row.metadata,
+          createdAt: row.createdAt
+        })),
+        lineageTotals: lineageTotals.rows.map(row => ({
+          recordType: row.recordType,
+          totalRecords: Number(row.totalRecords),
+          sources: Number(row.sources)
+        })),
+        lastEventAt: recentEvents.rows.length ? recentEvents.rows[0].createdAt : null
+      };
+
+    } catch (error) {
+      this.logger.warn('Failed to load pipeline audit summary', { error: error.message });
+      return null;
     } finally {
       client.release();
     }

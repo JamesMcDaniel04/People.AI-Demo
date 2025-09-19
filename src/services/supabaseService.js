@@ -158,6 +158,33 @@ export class SupabaseService {
     }
   }
 
+  async healthCheck() {
+    if (!this.supabase) {
+      return { status: 'disconnected', connected: false, error: 'Client not initialized' };
+    }
+
+    try {
+      const start = Date.now();
+      const { error } = await this.supabase.from('user_credentials').select('id').limit(1);
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      return {
+        status: 'connected',
+        connected: true,
+        latencyMs: Date.now() - start,
+        warning: error?.code === 'PGRST116'
+      };
+    } catch (error) {
+      this.logger.error('Supabase health check failed', { error: error.message });
+      return {
+        status: 'error',
+        connected: false,
+        error: error.message
+      };
+    }
+  }
+
   // User Credential Management
   async storeUserCredentials(userId, credentialType, credentials) {
     try {

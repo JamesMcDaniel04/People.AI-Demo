@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitoring Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.55);
+      --text: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #111827 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+    header .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+    }
+    header button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    header button:disabled {
+      opacity: 0.6;
+      cursor: progress;
+    }
+    main {
+      padding: 32px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    section {
+      background: var(--panel);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 32px 80px rgba(15, 23, 42, 0.25);
+    }
+    section h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      color: #93c5fd;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .comp-name .title { font-weight: 600; }
+    .comp-name .subtitle {
+      font-size: 0.75rem;
+      color: rgba(226, 232, 240, 0.7);
+    }
+    [data-overall] {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .incident-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+    }
+    .incident-body {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: rgba(226, 232, 240, 0.8);
+    }
+    .ts {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: rgba(226, 232, 240, 0.6);
+    }
+    .empty {
+      color: rgba(226, 232, 240, 0.6);
+      font-size: 0.85rem;
+    }
+    .performance-summary {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+    .timings tbody tr:hover {
+      background: rgba(59, 130, 246, 0.1);
+    }
+    .pipeline-summary {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+    .pipeline-summary .meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 0.75rem;
+      color: rgba(226, 232, 240, 0.7);
+    }
+    .pipeline-summary .quality {
+      font-size: 0.8rem;
+      color: rgba(226, 232, 240, 0.8);
+    }
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .pipeline-grid h3 {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(147, 197, 253, 0.9);
+    }
+    .pipeline-grid ul {
+      gap: 6px;
+    }
+    .pipeline-grid li {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: rgba(226, 232, 240, 0.85);
+    }
+    .pipeline-grid li span.label {
+      color: #bfdbfe;
+    }
+    .pipeline-recent tbody tr:hover {
+      background: rgba(34, 197, 94, 0.1);
+    }
+    @media (max-width: 768px) {
+      main {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+      header {
+        gap: 12px;
+        justify-content: center;
+      }
+      header .controls {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Monitoring Dashboard</h1>
+    <div class="controls">
+      <span>Overall Health: <span data-overall>unknown</span></span>
+      <button id="trigger-health">Run Health Check</button>
+      <small>Updated <span data-updated>—</span></small>
+    </div>
+  </header>
+  <main>
+    <section class="full">
+      <h2>Core Components</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Status</th>
+              <th>Availability</th>
+              <th>SLA Target</th>
+              <th>Latency</th>
+              <th>Last Checked</th>
+            </tr>
+          </thead>
+          <tbody data-components></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Performance &amp; SLA</h2>
+      <div data-performance></div>
+    </section>
+    <section>
+      <h2>Data Pipeline</h2>
+      <div class="pipeline-summary" data-pipeline-summary></div>
+      <div class="pipeline-grid">
+        <div>
+          <h3>Status (lookback)</h3>
+          <ul data-pipeline-status></ul>
+        </div>
+        <div>
+          <h3>Top Sources</h3>
+          <ul data-pipeline-providers></ul>
+        </div>
+        <div>
+          <h3>Conflict Hotspots</h3>
+          <ul data-pipeline-conflicts></ul>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="pipeline-recent">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Account</th>
+              <th>Source</th>
+              <th>Record</th>
+              <th>Status</th>
+              <th>Quality</th>
+            </tr>
+          </thead>
+          <tbody data-pipeline-events></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Incidents</h2>
+      <ul data-incidents></ul>
+    </section>
+  </main>
+  <script src="/js/monitoring.js" defer></script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { createDemoAPI } from './demoAPI.js';
 import { createGraphAPI } from './graphAPI.js';
 import { createAuthAPI } from './authAPI.js';
 import { createSettingsAPI } from './settingsAPI.js';
+import { createPeopleAIAPI } from './peopleAIAPI.js';
 import { createInstructorAPI } from './instructorAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +15,8 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { ExpressAdapter } from '@bull-board/express';
 import { metrics } from '../services/metricsService.js';
+import { createMonitoringService } from '../services/monitoringService.js';
+import { createAlertService } from '../services/alertService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowAPI {
@@ -22,6 +25,12 @@ export class WorkflowAPI {
     this.logger = new Logger(config);
     this.app = express();
     this.orchestrator = new WorkflowOrchestrator(config);
+    this.alertService = createAlertService(config);
+    this.monitoringService = createMonitoringService(config, {
+      alertService: this.alertService,
+      getPostgresService: () => this.orchestrator.postgresService
+    });
+    this.monitoringInitialized = false;
     this.setupMiddleware();
     this.setupBullBoard();
     this.setupRoutes();
@@ -95,6 +104,11 @@ export class WorkflowAPI {
       const __dirname = dirname(__filename);
       res.sendFile(join(__dirname, '../../public/dashboard.html'));
     });
+    this.app.get('/monitoring', (req, res) => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      res.sendFile(join(__dirname, '../../public/monitoring.html'));
+    });
     this.app.get('/dataset', (req, res) => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
@@ -146,6 +160,119 @@ export class WorkflowAPI {
       res.json({ pass: pass && !hard, hardFail: hard, thresholdMs: p95Threshold, hardFailMs: hardFail, results });
     });
 
+    // Monitoring endpoints
+    this.app.get('/monitoring/dashboard', (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).json({ error: 'Monitoring service not available' });
+      }
+      res.json(this.monitoringService.getDashboardSnapshot());
+    });
+
+    this.app.get('/monitoring/pipeline', (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).json({ error: 'Monitoring service not available' });
+      }
+      const summary = this.monitoringService.getPipelineSnapshot();
+      if (!summary) {
+        return res.status(204).end();
+      }
+      res.json(summary);
+    });
+
+    this.app.get('/monitoring/health', (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).json({ error: 'Monitoring service not available' });
+      }
+      const snapshot = this.monitoringService.getDashboardSnapshot();
+      res.json({
+        status: snapshot.overallStatus,
+        generatedAt: snapshot.generatedAt,
+        components: snapshot.components.map(item => ({
+          name: item.name,
+          status: item.state.status,
+          lastChecked: item.state.lastChecked,
+          responseTimeMs: item.state.responseTimeMs,
+          availability: item.state.availability,
+          slaTarget: item.slaTarget
+        })),
+        performance: snapshot.performance
+      });
+    });
+
+    this.app.get('/monitoring/incidents', (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).json({ error: 'Monitoring service not available' });
+      }
+      const limit = parseInt(req.query.limit || '50');
+      res.json({
+        incidents: this.monitoringService.getIncidents(Number.isNaN(limit) ? 50 : limit)
+      });
+    });
+
+    this.app.post('/monitoring/trigger', async (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).json({ error: 'Monitoring service not available' });
+      }
+      try {
+        const component = req.body?.component;
+        let state = null;
+        if (component) {
+          state = await this.monitoringService.evaluateComponent(component);
+        } else {
+          await this.monitoringService.evaluateAll();
+        }
+        res.json({
+          status: 'ok',
+          checkedAt: new Date().toISOString(),
+          component: component || null,
+          state
+        });
+      } catch (error) {
+        this.logger.error('Manual monitoring trigger failed', { error: error.message });
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    this.app.get('/monitoring/stream', (req, res) => {
+      if (!this.monitoringService) {
+        return res.status(503).end();
+      }
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      if (res.flushHeaders) {
+        res.flushHeaders();
+      }
+
+      const send = (payload) => {
+        try {
+          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        } catch (err) {
+          this.logger.warn('SSE send failed', { error: err.message });
+        }
+      };
+
+      send({ type: 'snapshot', snapshot: this.monitoringService.getDashboardSnapshot() });
+
+      const unsubscribe = this.monitoringService.subscribe(send);
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(': keep-alive\n\n');
+        } catch (err) {
+          this.logger.warn('SSE heartbeat failed', { error: err.message });
+          clearInterval(heartbeat);
+          unsubscribe();
+          res.end();
+        }
+      }, 15000);
+
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        res.end();
+      });
+    });
+
     // Workflow management routes
     this.app.post('/workflows', this.createWorkflow.bind(this));
     this.app.get('/workflows', this.listWorkflows.bind(this));
@@ -167,6 +294,15 @@ export class WorkflowAPI {
     this.app.post('/external/sync', this.syncExternal.bind(this));
     this.app.get('/data/:account/summary', this.getDataSummary.bind(this));
     this.app.get('/status/distribution', this.getDistributionStatus.bind(this));
+
+    // Reminder coordination
+    this.app.get('/reminders', this.listReminders.bind(this));
+    this.app.get('/reminders/summary', this.getReminderSummary.bind(this));
+    this.app.post('/reminders', this.createReminder.bind(this));
+    this.app.post('/reminders/:id/acknowledge', this.acknowledgeReminder.bind(this));
+    this.app.post('/reminders/:id/snooze', this.snoozeReminder.bind(this));
+    this.app.post('/reminders/:id/escalate', this.escalateReminder.bind(this));
+    this.app.post('/reminders/evaluate', this.evaluateReminders.bind(this));
 
     // Minimal Klavis OAuth (demo stub)
     this.app.get('/auth/klavis/start', this.startKlavisAuth.bind(this));
@@ -201,6 +337,8 @@ export class WorkflowAPI {
 
     // Settings API (UI configuration, prompts, scheduling preferences)
     this.app.use('/settings', createSettingsAPI(this.orchestrator, this.config));
+    // People.ai Demo Integration API (mocked orchestrator integration)
+    this.app.use('/peopleai', createPeopleAIAPI(this.orchestrator, this.config));
     // Simple chat endpoint backed by configured LLMs
     this.app.post('/settings/chat', async (req, res) => {
       try {
@@ -277,12 +415,122 @@ export class WorkflowAPI {
     
     this.logger.info('✅ Workflow API initialized');
 
+    await this.setupMonitoring().catch(error => {
+      this.logger.warn('⚠️ Monitoring setup skipped', { error: error.message });
+    });
+
     // Preload assessment-focused scheduled workflows if enabled by env
     try {
       await this.setupAssessmentDefaults();
     } catch (e) {
       this.logger.warn('⚠️ Assessment defaults setup skipped', { error: e.message });
     }
+  }
+
+  async setupMonitoring() {
+    if (!this.monitoringService || this.monitoringInitialized) {
+      return;
+    }
+
+    const register = (name, config) => {
+      try {
+        this.monitoringService.registerComponent(name, config);
+      } catch (error) {
+        this.logger.warn('Monitoring component registration failed', { component: name, error: error.message });
+      }
+    };
+
+    register('api-server', {
+      description: 'Workflow API server',
+      critical: true,
+      tags: ['api'],
+      check: async () => ({
+        status: 'healthy',
+        details: {
+          uptimeSeconds: Math.round(process.uptime()),
+          memoryRssMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+          pid: process.pid
+        }
+      })
+    });
+
+    const jobQueueService = this.orchestrator.jobQueueService;
+    if (jobQueueService) {
+      register('job-queue', {
+        description: 'BullMQ job queue',
+        critical: true,
+        tags: ['queue'],
+        check: async () => jobQueueService.healthCheck()
+      });
+
+      if (jobQueueService.redisService) {
+        register('redis', {
+          description: 'Redis connection',
+          critical: true,
+          tags: ['cache', 'queue'],
+          check: async () => jobQueueService.redisService.healthCheck()
+        });
+      }
+    }
+
+    if (this.orchestrator.postgresService) {
+      register('postgres', {
+        description: 'PostgreSQL backing store',
+        critical: true,
+        tags: ['database'],
+        check: async () => this.orchestrator.postgresService.healthCheck()
+      });
+    }
+
+    if (this.orchestrator.supabaseService) {
+      register('supabase', {
+        description: 'Supabase authentication',
+        tags: ['auth'],
+        check: async () => this.orchestrator.supabaseService.healthCheck()
+      });
+    }
+
+    if (this.orchestrator.graphService) {
+      register('neo4j', {
+        description: 'Neo4j knowledge graph',
+        tags: ['graph'],
+        check: async () => this.orchestrator.graphService.healthCheck()
+      });
+    }
+
+    if (this.orchestrator.n8nEnabled && this.orchestrator.n8nService) {
+      register('n8n', {
+        description: 'n8n workflow runner',
+        tags: ['automation'],
+        check: async () => {
+          try {
+            const ok = await this.orchestrator.n8nService.healthCheck();
+            return ok === true ? { status: 'healthy' } : ok;
+          } catch (error) {
+            return { status: 'unhealthy', error: error.message };
+          }
+        }
+      });
+    }
+
+    if (this.orchestrator.dataManager?.getStatus) {
+      register('data-integration', {
+        description: 'Data integration providers',
+        tags: ['data'],
+        check: async () => {
+          try {
+            const status = await this.orchestrator.dataManager.getStatus();
+            return { status: 'healthy', details: status };
+          } catch (error) {
+            return { status: 'degraded', error: error.message };
+          }
+        }
+      });
+    }
+
+    this.monitoringService.start();
+    await this.monitoringService.evaluateAll();
+    this.monitoringInitialized = true;
   }
 
   // Pre-install a minimal set of workflows that directly map to the assessment requirements
@@ -346,7 +594,7 @@ export class WorkflowAPI {
         });
       }
 
-      const workflow = this.orchestrator.createWorkflow(workflowConfig);
+      const workflow = await this.orchestrator.createWorkflow(workflowConfig);
       
       res.status(201).json({
         status: 'success',
@@ -460,22 +708,43 @@ export class WorkflowAPI {
   async executeWorkflow(req, res) {
     try {
       const { workflowId } = req.params;
+      const waitForCompletion = req.body?.waitForCompletion === true;
       const context = req.body.context || {};
       if (req.correlationId) context.correlationId = req.correlationId;
-      
-      const result = await this.orchestrator.executeWorkflow(workflowId, {
+
+      const workflow = this.orchestrator.getWorkflow(workflowId);
+      if (!workflow) {
+        return res.status(404).json({ error: 'Workflow not found' });
+      }
+
+      const executionPromise = this.orchestrator.executeWorkflow(workflowId, {
         ...context,
         triggeredBy: 'api',
         apiRequest: true
       });
 
+      if (waitForCompletion) {
+        const result = await executionPromise;
+        return res.json({
+          status: 'success',
+          execution: result
+        });
+      }
+
+      executionPromise.catch(error => {
+        this.logger.error('❌ Workflow execution failed (async)', {
+          workflowId,
+          error: error.message
+        });
+      });
+
       res.json({
-        status: 'success',
-        execution: result
+        status: 'accepted',
+        message: 'Workflow execution started in the background'
       });
 
     } catch (error) {
-      this.logger.error('❌ Workflow execution failed', { error: error.message });
+      this.logger.error('❌ Workflow execution request failed', { error: error.message });
       res.status(500).json({
         error: 'Workflow execution failed',
         message: error.message
@@ -848,16 +1117,140 @@ export class WorkflowAPI {
     }
   }
 
+  getReminderService() {
+    return this.orchestrator?.reminderService;
+  }
+
+  async listReminders(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.json({ status: 'disabled', reminders: [], summary: { total: 0 } });
+    }
+
+    try {
+      const filters = {
+        accountName: req.query.account || req.query.accountName,
+        status: req.query.status,
+        priority: req.query.priority
+      };
+      const reminders = service.getReminders(filters);
+      res.json({ status: 'success', reminders, summary: service.getSummary() });
+    } catch (error) {
+      this.logger.error('Failed to list reminders', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async getReminderSummary(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.json({ status: 'disabled', summary: { total: 0 } });
+    }
+
+    try {
+      res.json({ status: 'success', summary: service.getSummary() });
+    } catch (error) {
+      this.logger.error('Failed to get reminder summary', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async createReminder(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.status(400).json({ status: 'error', message: 'Reminder service disabled' });
+    }
+
+    try {
+      const reminder = await service.createManualReminder(req.body || {});
+      res.status(201).json({ status: 'success', reminder });
+    } catch (error) {
+      this.logger.error('Failed to create reminder', { error: error.message });
+      res.status(400).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async acknowledgeReminder(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.status(400).json({ status: 'error', message: 'Reminder service disabled' });
+    }
+
+    try {
+      const reminder = await service.acknowledgeReminder(req.params.id, req.body || {});
+      res.json({ status: 'success', reminder });
+    } catch (error) {
+      this.logger.error('Failed to acknowledge reminder', { id: req.params.id, error: error.message });
+      res.status(400).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async snoozeReminder(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.status(400).json({ status: 'error', message: 'Reminder service disabled' });
+    }
+
+    try {
+      const reminder = await service.snoozeReminder(req.params.id, req.body || {});
+      res.json({ status: 'success', reminder });
+    } catch (error) {
+      this.logger.error('Failed to snooze reminder', { id: req.params.id, error: error.message });
+      res.status(400).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async escalateReminder(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.status(400).json({ status: 'error', message: 'Reminder service disabled' });
+    }
+
+    try {
+      const reminder = await service.forceEscalation(req.params.id, req.body || {});
+      res.json({ status: 'success', reminder });
+    } catch (error) {
+      this.logger.error('Failed to escalate reminder', { id: req.params.id, error: error.message });
+      res.status(400).json({ status: 'error', message: error.message });
+    }
+  }
+
+  async evaluateReminders(req, res) {
+    const service = this.getReminderService();
+    if (!service || !service.isEnabled()) {
+      return res.status(400).json({ status: 'error', message: 'Reminder service disabled' });
+    }
+
+    try {
+      await service.evaluateReminders();
+      res.json({ status: 'success', summary: service.getSummary() });
+    } catch (error) {
+      this.logger.error('Failed to evaluate reminders', { error: error.message });
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  }
+
   async startKlavisAuth(req, res) {
     try {
-      const redirectUri = this.config.mcp?.oauth?.redirectUri || 'http://localhost:3001/auth/klavis/callback';
-      const state = Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
+      const { server, userId, redirectUri, mode } = req.query;
+      if (!server) {
+        return res.status(400).json({ error: 'server query param is required' });
+      }
+      const klavis = this.orchestrator.dataManager.getKlavisProvider?.();
+      if (!klavis) {
+        return res.status(400).json({ error: 'Klavis provider not initialized' });
+      }
+      const flow = await klavis.startOAuthFlow(server, {
+        userId,
+        redirectUri
+      });
+      const shouldRedirect = (mode || '').toLowerCase() === 'redirect' || (req.query.redirect || '').toLowerCase() === 'true';
+      if (shouldRedirect) {
+        return res.redirect(flow.oauthUrl);
+      }
       res.json({
         status: 'success',
-        message: 'Use your Klavis console to connect services, then return with code/token to callback.',
-        redirectUri,
-        state,
-        callbackExample: `${redirectUri}?server=gmail&token=demo-token&state=${state}`
+        ...flow
       });
     } catch (error) {
       this.logger.error('❌ Failed to start Klavis auth', { error: error.message });
@@ -867,16 +1260,42 @@ export class WorkflowAPI {
 
   async klavisAuthCallback(req, res) {
     try {
-      const { server, token } = req.query;
-      if (!server || !token) {
-        return res.status(400).json({ error: 'server and token query params are required' });
-      }
       const klavis = this.orchestrator.dataManager.getKlavisProvider?.();
       if (!klavis) {
         return res.status(400).json({ error: 'Klavis provider not initialized' });
       }
-      await klavis.connectServer(server, { token });
-      res.json({ status: 'success', connected: server });
+      const { state } = req.query;
+      if (!state) {
+        return res.status(400).json({ error: 'state query param is required' });
+      }
+      const result = await klavis.completeOAuthFlow({
+        state,
+        server: req.query.server,
+        instanceId: req.query.instance_id,
+        code: req.query.code,
+        token: req.query.token,
+        params: req.query
+      });
+      const acceptsHtml = req.accepts(['html', 'json']) === 'html';
+      if (acceptsHtml) {
+        res.type('html').send(`
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>Klavis Connection Complete</title>
+              <style>body{font-family:-apple-system,system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:32px;background:#f9fafb;color:#111}</style>
+            </head>
+            <body>
+              <h1>Connection Successful</h1>
+              <p>Connected <strong>${result.server}</strong> via Klavis MCP.</p>
+              <p>You may close this window.</p>
+            </body>
+          </html>
+        `);
+        return;
+      }
+      res.json({ status: 'success', ...result });
     } catch (error) {
       this.logger.error('❌ Klavis auth callback failed', { error: error.message });
       res.status(500).json({ error: 'Klavis auth callback failed', message: error.message });
@@ -891,6 +1310,10 @@ export class WorkflowAPI {
       url: req.url,
       method: req.method
     });
+
+    if (this.monitoringService) {
+      this.monitoringService.recordError('api-server', error, { url: req.url, method: req.method });
+    }
 
     res.status(500).json({
       error: 'Internal server error',
@@ -1006,6 +1429,9 @@ export class WorkflowAPI {
   async stop() {
     if (this.server) {
       this.server.close();
+      if (this.monitoringService) {
+        this.monitoringService.stop();
+      }
       await this.orchestrator.shutdown();
       this.logger.info('🛑 Workflow API server stopped');
     }

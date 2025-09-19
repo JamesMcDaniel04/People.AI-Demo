@@ -11,6 +11,10 @@ class Dashboard {
         // Load initial data for visible tabs
         await this.loadWorkflows();
         await this.loadQueueStats();
+        // Demo page extras
+        this.loadRecentActivity().catch(()=>{});
+        this.initDemoMcpPanel().catch(()=>{});
+        this.initPeopleAISpotlight().catch(()=>{});
         // Initialize demo mini scheduler UI (optional schedule)
         this.initDemoMiniScheduler();
         // Initialize editable sections (Goals, Integrations, Instructions)
@@ -492,7 +496,27 @@ class Dashboard {
     }
 
     // People.ai modal controls
-    showPeopleAIModal() { document.getElementById('peopleaiModal').classList.add('active'); }
+    async showPeopleAIModal() {
+        const modal = document.getElementById('peopleaiModal');
+        modal.classList.add('active');
+        // Prefill toggles from backend status (settings-backed)
+        try {
+            const r = await fetch('/peopleai/status');
+            if (r.ok) {
+                const j = await r.json();
+                const f = j.features || {};
+                const enabled = !!j.enabled;
+                const map = {
+                    peopleaiEnabled: enabled,
+                    peopleaiFeatureCapture: !!f.autoCapture,
+                    peopleaiFeatureEngagement: !!f.engagementScoring,
+                    peopleaiFeatureCoaching: !!f.coachingInsights,
+                    peopleaiFeatureTriggers: !!f.workflowTriggers
+                };
+                Object.entries(map).forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.checked = val; });
+            }
+        } catch (_) { /* ignore */ }
+    }
     hidePeopleAIModal() { document.getElementById('peopleaiModal').classList.remove('active'); }
 
     async savePeopleAIConfig() {
@@ -754,6 +778,231 @@ class Dashboard {
         }
     }
 
+    // Recent workflow activity (left column)
+    async loadRecentActivity() {
+        const el = document.getElementById('recentActivity');
+        if (!el) return;
+        try {
+            const res = await fetch('/workflows');
+            const data = await res.json();
+            const list = Array.isArray(data) ? data : (data.workflows || []);
+            // Build real items (up to 5)
+            const real = (list || []).slice().sort((a,b)=> new Date(b.lastRun||b.createdAt||0) - new Date(a.lastRun||a.createdAt||0)).slice(0,5);
+            let html = '';
+            if (real.length > 0) {
+                html += real.map(w=>{
+                    const status = (w.status||'created').toLowerCase();
+                    const badge = status === 'completed' ? 'success' : status === 'failed' ? 'failed' : 'running';
+                    const when = new Date(w.lastRun || w.createdAt || Date.now()).toLocaleString();
+                    return `
+                    <li class="feed-item">
+                        <span class="dot" style="background:${badge==='success'?'#27ae60':badge==='failed'?'#e74c3c':'#3498db'}"></span>
+                        <div>
+                            <div><strong>${this._escapeHtml(w.name||'Workflow')}</strong> <span class="badge ${badge}">${status}</span></div>
+                            <div class="meta">Last: ${when}</div>
+                        </div>
+                    </li>`;
+                }).join('');
+            }
+
+            // Top up with mock items to ensure 4-5 entries are visible
+            const need = Math.max(0, 5 - (real.length));
+            if (need > 0) {
+                html += this._mockActivityItems(need);
+            }
+            if (!html) {
+                // If still empty, show 5 mocks
+                html = this._mockActivityItems(5);
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            // On error, still render mock activity for demo friendliness
+            el.innerHTML = this._mockActivityItems(5);
+        }
+    }
+
+    // Render 4-5 mock recent activity items
+    _mockActivityItems(count = 5) {
+        const now = Date.now();
+        const events = [
+            { title: 'Generated account plan for Stripe', status: 'completed', badge: 'success', ts: now - 6*60*1000 },
+            { title: 'Posted Slack summary to #account-planning', status: 'completed', badge: 'success', ts: now - 14*60*1000 },
+            { title: 'Sent executive report email', status: 'completed', badge: 'success', ts: now - 38*60*1000 },
+            { title: 'Risk alert triggered: Contract renewal', status: 'failed', badge: 'failed', ts: now - 75*60*1000 },
+            { title: 'Workflow created: Daily Account Health', status: 'created', badge: 'running', ts: now - 26*60*60*1000 }
+        ];
+        const items = events.slice(0, Math.max(1, Math.min(count, events.length))).map(ev => {
+            const when = new Date(ev.ts).toLocaleString();
+            const dot = ev.badge==='success'?'#27ae60':(ev.badge==='failed'?'#e74c3c':'#3498db');
+            return `
+            <li class="feed-item">
+                <span class="dot" style="background:${dot}"></span>
+                <div>
+                    <div><strong>${this._escapeHtml(ev.title)}</strong> <span class="badge ${ev.badge}">${ev.status}</span></div>
+                    <div class="meta">Last: ${when}</div>
+                </div>
+            </li>`;
+        }).join('');
+        return items;
+    }
+
+    // People.ai Spotlight (demo integration orchestrator)
+    async initPeopleAISpotlight() {
+        const tokenEl = document.getElementById('peopleaiToken');
+        const connectBtn = document.getElementById('peopleaiConnectBtn');
+        const disconnectBtn = document.getElementById('peopleaiDisconnectBtn');
+        const syncBtn = document.getElementById('peopleaiSyncBtn');
+        const statusBox = document.getElementById('peopleaiStatusBox');
+        const kpisBox = document.getElementById('peopleaiKpis');
+        const pill = document.getElementById('peopleaiConnPill');
+        const signalsEl = document.getElementById('peopleaiSignals');
+        if (!statusBox) return; // no spotlight on this page
+
+        const renderStatus = (j) => {
+            const s = j || {};
+            const header = statusBox.querySelector('.result-header');
+            const content = statusBox.querySelector('.result-content');
+            if (header) header.textContent = `People.ai Status${s.connected?' • Connected':''}`;
+            if (content) {
+                if (!s.connected) {
+                    content.textContent = 'Not connected';
+                } else {
+                    const org = s.org || {};
+                    const sync = s.sync || {};
+                    content.innerHTML = `
+                        <div><strong>Org:</strong> ${this._escapeHtml(org.name||'DemoCo')} (${this._escapeHtml(org.plan||'Enterprise')})</div>
+                        <div><strong>Seats:</strong> ${org.seats||0} • <strong>Domain:</strong> ${this._escapeHtml(org.domain||'example.com')}</div>
+                        <div><strong>Last Sync:</strong> ${sync.lastSync ? new Date(sync.lastSync).toLocaleString() : '—'} • <strong>Engagement:</strong> ${sync.engagementScore||0}</div>
+                        <div><strong>Counts:</strong> ${sync.contacts||0} contacts • ${sync.activities||0} activities • ${sync.deals||0} deals</div>
+                        <div><strong>Token:</strong> ${this._escapeHtml(s.tokenMasked||'****')}</div>
+                    `;
+                }
+            }
+            if (pill) {
+                pill.textContent = s.connected ? 'Status: Online' : 'Status: Offline';
+                pill.classList.toggle('ok', !!s.connected);
+                pill.classList.toggle('err', !s.connected);
+            }
+            if (kpisBox) {
+                const sync = s.sync || {};
+                kpisBox.innerHTML = `
+                    <div class="kpi"><div class="kpi-label">Contacts</div><div class="kpi-value">${sync.contacts||0}</div></div>
+                    <div class="kpi"><div class="kpi-label">Activities</div><div class="kpi-value">${sync.activities||0}</div></div>
+                    <div class="kpi"><div class="kpi-label">Deals</div><div class="kpi-value">${sync.deals||0}</div></div>
+                    <div class="kpi"><div class="kpi-label">Engagement</div><div class="kpi-value">${sync.engagementScore||0}</div></div>
+                `;
+            }
+            if (tokenEl) tokenEl.value = '';
+        };
+
+        const renderSignals = (signals) => {
+            if (!signalsEl) return;
+            const arr = Array.isArray(signals) ? signals.slice(0,8) : [];
+            if (arr.length === 0) { signalsEl.innerHTML = '<li class="meta">No recent signals</li>'; return; }
+            signalsEl.innerHTML = arr.map(ev => {
+                const dot = ev.severity==='warn'?'#f39c12':(ev.severity==='error'?'#e74c3c':'#27ae60');
+                const when = ev.ts ? new Date(ev.ts).toLocaleString() : '';
+                const iconClass = ev.type==='email' ? 'sig-email fa-envelope' : ev.type==='meeting' ? 'sig-meeting fa-handshake' : ev.type==='hygiene' ? 'sig-hygiene fa-broom' : 'sig-contact fa-user-plus';
+                return `
+                <li class="feed-item">
+                    <span class="dot" style="background:${dot}"></span>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span class="sig-icon ${iconClass.split(' ')[0]}"><i class="fas ${iconClass.split(' ')[1]}"></i></span>
+                          <div><strong>${this._escapeHtml(ev.title||ev.type||'Signal')}</strong> <span class="badge ${ev.severity||'success'}">${this._escapeHtml(ev.type||'')}</span></div>
+                        </div>
+                        <div class="meta">${this._escapeHtml(ev.detail||'')} ${when?('• '+when):''}</div>
+                    </div>
+                </li>`;
+            }).join('');
+        };
+
+        const load = async () => {
+            try {
+                const r = await fetch('/peopleai/status');
+                if (!r.ok) throw new Error('status not available');
+                const j = await r.json();
+                renderStatus(j);
+                renderSignals(j.recentSignals||[]);
+            } catch (_) {
+                // Silent fail – spotlight not available
+            }
+        };
+
+        connectBtn?.addEventListener('click', async () => {
+            try {
+                this.showLoading();
+                const token = tokenEl?.value?.trim();
+                const r = await fetch('/peopleai/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+                await r.json();
+                await load();
+            } catch (e) {
+                alert('Connect failed');
+            } finally { this.hideLoading(); }
+        });
+        disconnectBtn?.addEventListener('click', async () => {
+            try {
+                this.showLoading();
+                await fetch('/peopleai/disconnect', { method: 'POST' });
+                await load();
+            } catch (_) {} finally { this.hideLoading(); }
+        });
+        syncBtn?.addEventListener('click', async () => {
+            try {
+                this.showLoading();
+                await fetch('/peopleai/sync', { method: 'POST' });
+                await load();
+            } catch (_) {} finally { this.hideLoading(); }
+        });
+
+        await load();
+    }
+
+    // Right column MCP mini-panel
+    async initDemoMcpPanel() {
+        const ids = ['dg_mcpGmail','dg_mcpCalendar','dg_mcpDrive','dg_mcpSlack','dg_mcpNotion'];
+        if (!ids.some(id=>document.getElementById(id))) return;
+        try {
+            const r = await fetch('/settings');
+            const j = await r.json();
+            const servers = j?.current?.data?.mcp?.servers || {};
+            document.getElementById('dg_mcpGmail').checked = !!servers.gmail?.enabled;
+            document.getElementById('dg_mcpCalendar').checked = !!servers.googleCalendar?.enabled;
+            document.getElementById('dg_mcpDrive').checked = !!servers.googleDrive?.enabled;
+            document.getElementById('dg_mcpSlack').checked = !!servers.slack?.enabled;
+            document.getElementById('dg_mcpNotion').checked = !!servers.notion?.enabled;
+        } catch (_) {}
+
+        const refreshBtn = document.getElementById('dg_load_mcp');
+        const saveBtn = document.getElementById('dg_save_mcp');
+        refreshBtn?.addEventListener('click', (e)=>{ e.preventDefault(); this.initDemoMcpPanel(); });
+        saveBtn?.addEventListener('click', async (e)=>{
+            e.preventDefault();
+            try {
+                this.showLoading();
+                const payload = {
+                    mcp: {
+                        servers: {
+                            gmail: { enabled: document.getElementById('dg_mcpGmail').checked },
+                            googleCalendar: { enabled: document.getElementById('dg_mcpCalendar').checked },
+                            googleDrive: { enabled: document.getElementById('dg_mcpDrive').checked },
+                            slack: { enabled: document.getElementById('dg_mcpSlack').checked },
+                            notion: { enabled: document.getElementById('dg_mcpNotion').checked }
+                        }
+                    }
+                };
+                const res = await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const j = await res.json();
+                if (!j.success) throw new Error(j.error||'Failed to save MCP');
+                alert('MCP settings saved');
+            } catch (err) {
+                alert(`Save failed: ${err.message}`);
+            } finally {
+                this.hideLoading();
+            }
+        });
+    }
+
     // Load Workflows
     async loadWorkflows() {
         try {
@@ -999,10 +1248,11 @@ class Dashboard {
     async runWorkflow(id) {
         try {
             this.showLoading();
-            const res = await fetch(`/workflows/${id}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: {} }) });
+            const res = await fetch(`/workflows/${id}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: {}, waitForCompletion: false }) });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to run workflow');
-            alert('Workflow execution started.');
+            if (!res.ok) throw new Error(data.message || data.error || 'Failed to run workflow');
+            const msg = data.message || 'Workflow execution started. Expect the Slack post within about a minute.';
+            alert(msg);
         } catch (err) {
             alert(`Failed to run workflow: ${err.message}`);
         } finally {

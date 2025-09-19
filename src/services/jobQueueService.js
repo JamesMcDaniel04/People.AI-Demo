@@ -493,6 +493,41 @@ export class JobQueueService {
     return { enabled: true, queues: stats };
   }
 
+  async healthCheck() {
+    if (!this.enabled) {
+      return { status: 'disabled', enabled: false };
+    }
+
+    try {
+      const redisStatus = await this.redisService.healthCheck();
+      const queueSummaries = {};
+      for (const [name, queue] of this.queues.entries()) {
+        try {
+          const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'completed', 'failed');
+          queueSummaries[name] = counts;
+        } catch (error) {
+          queueSummaries[name] = { error: error.message };
+        }
+      }
+
+      const latencyMs = redisStatus.latency ? parseFloat(String(redisStatus.latency).replace('ms', '')) : undefined;
+      const status = redisStatus.status === 'connected' ? 'healthy' : redisStatus.status === 'mock' ? 'healthy' : 'degraded';
+
+      return {
+        status,
+        latencyMs,
+        redis: redisStatus,
+        queues: queueSummaries
+      };
+    } catch (error) {
+      this.logger.error('Job queue health check failed', { error: error.message });
+      return {
+        status: 'error',
+        error: error.message
+      };
+    }
+  }
+
   isEnabled() {
     return this.enabled;
   }

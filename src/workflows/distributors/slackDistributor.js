@@ -14,7 +14,10 @@ export class SlackDistributor {
   async initialize() {
     this.logger.info('🔄 Initializing Slack Distributor...');
 
-    const slackToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN;
+    const slackToken = process.env.SLACK_BOT_TOKEN
+      || process.env.SLACK_TOKEN
+      || process.env.slack_Bot_token
+      || process.env.slack_bot_token;
     
     if (slackToken) {
       this.slack = new WebClient(slackToken);
@@ -123,6 +126,91 @@ export class SlackDistributor {
     }
   }
 
+  async sendReminder(reminder, channelConfig = {}, options = {}) {
+    const channel = channelConfig.target || channelConfig.channel || this.config?.reminders?.defaultSlackChannel;
+    if (!channel) {
+      this.logger.warn('⚠️ Slack reminder skipped (no channel configured)', {
+        account: reminder.accountName,
+        priority: reminder.priority
+      });
+      return { status: 'skipped', reason: 'no-channel' };
+    }
+
+    const escalate = options.escalate === true;
+    const mentions = this.collectReminderMentions(channelConfig, escalate);
+    const payload = this.buildReminderPayload(reminder, channel, mentions, escalate);
+
+    try {
+      if (this.slack) {
+        const result = await this.slack.chat.postMessage({
+          channel,
+          ...payload,
+          thread_ts: channelConfig.threadKey || undefined
+        });
+
+        this.logger.info('✅ Slack reminder sent', {
+          channel,
+          account: reminder.accountName,
+          priority: reminder.priority,
+          reminderId: reminder.id,
+          escalation: escalate,
+          messageTs: result.ts
+        });
+        statusService.record('slack', {
+          account: reminder.accountName,
+          channel,
+          ok: true,
+          type: escalate ? 'reminder-escalation' : 'reminder'
+        });
+        return {
+          status: 'sent',
+          messageTs: result.ts,
+          sentAt: new Date().toISOString()
+        };
+      }
+
+      this.logger.info('💬 Slack reminder (mock mode)', {
+        channel,
+        account: reminder.accountName,
+        priority: reminder.priority,
+        escalation: escalate,
+        preview: payload.text.substring(0, 120)
+      });
+      statusService.record('slack', {
+        account: reminder.accountName,
+        channel,
+        ok: true,
+        type: escalate ? 'reminder-escalation' : 'reminder',
+        mode: 'mock'
+      });
+      return {
+        status: 'sent',
+        messageTs: `mock-${Date.now()}`,
+        sentAt: new Date().toISOString(),
+        mode: 'mock'
+      };
+    } catch (error) {
+      this.logger.error('❌ Slack reminder failed', {
+        channel,
+        account: reminder.accountName,
+        escalation: escalate,
+        error: error.message
+      });
+      statusService.record('slack', {
+        account: reminder.accountName,
+        channel,
+        ok: false,
+        error: error.message,
+        type: escalate ? 'reminder-escalation' : 'reminder'
+      });
+      return {
+        status: 'failed',
+        error: error.message,
+        failedAt: new Date().toISOString()
+      };
+    }
+  }
+
   async sendToChannel(channelConfig, accountPlan, format, mentions, context) {
     const { channel, threadKey } = channelConfig;
     const { accountName, executionId } = context;
@@ -187,6 +275,91 @@ export class SlackDistributor {
     }
   }
 
+  collectReminderMentions(channelConfig, escalate) {
+    const metaMentions = Array.isArray(channelConfig?.meta?.mentions) ? channelConfig.meta.mentions : [];
+    const configured = escalate
+      ? (this.config?.reminders?.escalationMentions || [])
+      : (this.config?.reminders?.defaultMentions || []);
+    return Array.from(new Set([...configured, ...metaMentions])).filter(Boolean);
+  }
+
+  buildReminderPayload(reminder, channel, mentions, escalate) {
+    const mentionText = mentions.map(value => this.normalizeSlackMention(value)).filter(Boolean).join(' ');
+    const dueText = this.formatReminderDue(reminder.dueAt);
+    const priorityText = (reminder.priority || 'medium').toUpperCase();
+    const headline = `${escalate ? ':rotating_light:' : ':bell:'} *${escalate ? 'Escalation' : 'Reminder'} · ${reminder.accountName}*`;
+    const baseText = `${headline} · Priority ${priorityText} · Due ${dueText}`;
+    const text = `${baseText}${mentionText ? ` ${mentionText}` : ''}. ${reminder.reason || ''} Next step: ${reminder.recommendedAction || 'Review plan.'}`.trim();
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${headline}${mentionText ? ` ${mentionText}` : ''}`
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Priority:* ${priorityText}` },
+          { type: 'mrkdwn', text: `*Due:* ${dueText}` },
+          { type: 'mrkdwn', text: `*Health:* ${reminder.healthScore ?? 'N/A'}` },
+          { type: 'mrkdwn', text: `*Status:* ${reminder.status || 'scheduled'}` }
+        ]
+      }
+    ];
+
+    if (reminder.reason) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*Reason:* ${reminder.reason}` }
+      });
+    }
+
+    if (reminder.recommendedAction) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*Next Step:* ${reminder.recommendedAction}` }
+      });
+    }
+
+    const contextBits = [];
+    if (reminder.context?.workflowName) {
+      contextBits.push(`Workflow: ${reminder.context.workflowName}`);
+    }
+    if (reminder.context?.executionId) {
+      contextBits.push(`Execution: ${reminder.context.executionId}`);
+    }
+    if (contextBits.length > 0) {
+      blocks.push({
+        type: 'context',
+        elements: contextBits.map(textItem => ({ type: 'mrkdwn', text: textItem }))
+      });
+    }
+
+    return { text, blocks };
+  }
+
+  normalizeSlackMention(value) {
+    if (!value || typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (trimmed.startsWith('<@') && trimmed.endsWith('>')) return trimmed;
+    if (trimmed.startsWith('@')) return `<@${trimmed.slice(1)}>`;
+    return `<@${trimmed}>`;
+  }
+
+  formatReminderDue(dueAt) {
+    if (!dueAt) return 'asap';
+    const date = new Date(dueAt);
+    if (Number.isNaN(date.getTime())) return 'asap';
+    try {
+      return date.toLocaleString(undefined, { hour12: true });
+    } catch (_) {
+      return date.toISOString();
+    }
+  }
+
   generateSlackMessage(accountPlan, format, mentions, context) {
     const { accountName, executionId } = context;
     
@@ -210,6 +383,10 @@ export class SlackDistributor {
 
   generateDealflowMessage(accountPlan, mentions, context) {
     const { accountName } = context;
+    // Provide a scripted Stripe demo message for the create & run workflow path.
+    if ((accountName || '').toLowerCase() === 'stripe') {
+      return this.generateStripeDealflowMessage();
+    }
     const score = accountPlan?.accountOverview?.healthScore?.score ?? 'N/A';
     const healthEmoji = typeof score === 'number' ? (score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴') : '🟡';
     const core = accountPlan?.metadata?.dataSources?.dataSourcesBreakdown?.coreGTM || {};
@@ -237,6 +414,37 @@ export class SlackDistributor {
         { type: 'context', elements: [{ type: 'mrkdwn', text: details }] },
         nexts ? { type: 'section', text: { type: 'mrkdwn', text: `*Next Steps*\n${nexts}` } } : undefined
       ].filter(Boolean)
+    };
+  }
+
+  generateStripeDealflowMessage() {
+    const text = [
+      'Account Plan: Stripe',
+      'Date: Sep 16, 2025',
+      'Account Health Score: 88/100 🟢',
+      'Status: Strong performance, exceeding all success metrics',
+      'Top 3 Strategic Recommendations:',
+      'Implement Stripe Billing pilot (Due: Sep 26, 2025) – Subscription growth accelerating, automation needed',
+      'Deploy Stripe Radar (Due: Sep 19, 2025) – Fraud risk increasing, need advanced fraud protection',
+      'Finalize Australia launch plan (Due: Sep 26, 2025) – International expansion, ready for Q3 launch',
+      'Stakeholders: James Mitchell (CEO), Priya Patel (VP Eng), David Kim (CFO), Michael Torres (Product), Jennifer Wong (CSM), Sarah Chen (AE), Marcus Rodriguez (SE)',
+      'Expansion: Billing, Radar, Capital, Australia/Japan',
+      'Risks: Fraud, technical debt, reconciliation',
+      'Next Review: Sep 19, 2025',
+      'ClickUp tasks have been created for each recommendation. Let me know if you need more detail or want to adjust priorities.'
+    ].join('\n');
+
+    return {
+      text,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text
+          }
+        }
+      ]
     };
   }
 

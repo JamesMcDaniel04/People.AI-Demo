@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createHash } from 'crypto';
 import { Logger } from '../../utils/logger.js';
 import { getRedisService } from '../../services/redisService.js';
 import { statusService } from '../../services/statusService.js';
@@ -10,6 +11,9 @@ export class CRMDistributor {
     this.crmClient = null;
     this.crmType = process.env.CRM_TYPE || 'salesforce'; // salesforce, hubspot, pipedrive
     this.redis = getRedisService(config);
+    this.crmDefaults = config.crm || {};
+    this.taskNamespace = `${process.env.JOB_QUEUE_PREFIX || 'ai-account-planner'}:crm-tasks`;
+    this.verificationConfig = this.crmDefaults.verification || { enabled: true, maxAttempts: 1, delayMs: 2000 };
   }
 
   async initialize() {
@@ -138,6 +142,64 @@ export class CRMDistributor {
     }
   }
 
+  async sendReminder(reminder, channelConfig = {}, options = {}) {
+    const escalate = options.escalate === true;
+    const subject = channelConfig.subject
+      || `[Reminder${escalate ? ' Escalation' : ''}] ${reminder.accountName}`;
+    const description = this.buildReminderDescription(reminder, escalate);
+
+    const payload = {
+      account: reminder.accountName,
+      subject,
+      description,
+      dueAt: reminder.dueAt,
+      priority: reminder.priority,
+      escalation: escalate
+    };
+
+    try {
+      if (this.mockMode || !this.crmClient) {
+        this.logger.info('🗂️ CRM reminder logged (mock mode)', payload);
+        statusService.record('crm', {
+          account: reminder.accountName,
+          ok: true,
+          type: escalate ? 'reminder-escalation' : 'reminder',
+          mode: 'mock'
+        });
+        return { status: 'queued', mode: 'mock' };
+      }
+
+      // In production this would create a CRM task/ticket. For the demo we log and acknowledge the queueing.
+      this.logger.info('🗂️ CRM reminder queued', payload);
+      statusService.record('crm', {
+        account: reminder.accountName,
+        ok: true,
+        type: escalate ? 'reminder-escalation' : 'reminder',
+        mode: 'api'
+      });
+      return { status: 'queued', mode: 'api' };
+    } catch (error) {
+      this.logger.error('❌ CRM reminder failed', {
+        account: reminder.accountName,
+        error: error.message
+      });
+      statusService.record('crm', {
+        account: reminder.accountName,
+        ok: false,
+        error: error.message,
+        type: escalate ? 'reminder-escalation' : 'reminder'
+      });
+      return { status: 'failed', error: error.message };
+    }
+  }
+
+  buildReminderDescription(reminder, escalate) {
+    const due = reminder.dueAt ? new Date(reminder.dueAt).toISOString() : 'as soon as possible';
+    const reason = reminder.reason || 'Follow up required based on latest analysis.';
+    const nextStep = reminder.recommendedAction || 'Review the account plan and engage stakeholders.';
+    return `${escalate ? 'Escalated reminder' : 'Reminder'} for ${reminder.accountName}\nPriority: ${reminder.priority || 'medium'}\nDue: ${due}\nReason: ${reason}\nNext Step: ${nextStep}`;
+  }
+
   async executeAction(action, accountPlan, config, context) {
     const { accountName, executionId } = context;
 
@@ -254,65 +316,665 @@ export class CRMDistributor {
 
   async createTasks(accountPlan, config, context) {
     const { accountName, executionId } = context;
-    const recommendations = accountPlan.strategicRecommendations || {};
-    const tasks = [];
+    const maxTasks = config.maxTasks || 5;
 
-    // Create tasks from immediate recommendations
-    if (recommendations.immediate) {
-      for (const rec of recommendations.immediate.slice(0, 3)) { // Limit to 3 immediate tasks
-        const task = {
-          subject: `AI Recommendation: ${rec.action}`,
-          description: `Account: ${accountName}\nRationale: ${rec.rationale}\nExpected Outcome: ${rec.outcome}\nExecution ID: ${executionId}`,
-          priority: 'High',
-          dueDate: this.calculateDueDate(rec.timeline),
-          status: 'Open',
-          ownerId: config.defaultOwnerId || await this.getDefaultOwnerId(),
-          accountName: accountName,
-          type: 'AI Generated Task'
-        };
-        tasks.push(task);
+    let accountId = `mock-account-${accountName}`;
+    if (this.crmClient) {
+      try {
+        const resolvedAccountId = await this.findAccountId(accountName);
+        if (resolvedAccountId) {
+          accountId = resolvedAccountId;
+        } else {
+          this.logger.warn('⚠️ Account not found in CRM for task creation', {
+            accountName,
+            crmType: this.crmType
+          });
+        }
+      } catch (error) {
+        this.logger.warn('⚠️ Failed to resolve account ID for CRM tasks', {
+          accountName,
+          crmType: this.crmType,
+          error: error.message
+        });
       }
+    }
+
+    const tasks = await this.buildTaskPayloads(
+      accountPlan,
+      config,
+      { ...context, accountId },
+      maxTasks
+    );
+
+    if (tasks.length === 0) {
+      this.logger.info('ℹ️ No actionable recommendations generated for CRM task creation', {
+        accountName,
+        executionId
+      });
+
+      return {
+        action: 'createTasks',
+        status: 'success',
+        taskCount: 0,
+        createdTasks: [],
+        accountId,
+        createdAt: new Date().toISOString()
+      };
     }
 
     if (this.crmClient) {
       const createdTasks = [];
+      const failedTasks = [];
+
       for (const task of tasks) {
-        const result = await this.createCRMTask(task);
-        createdTasks.push(result);
+        try {
+          const crmResult = await this.createCRMTask(task);
+          await this.recordTaskLifecycle(accountName, task, 'created', crmResult);
+
+          let verification = { verified: false, status: 'skipped' };
+          if (this.verificationConfig.enabled !== false) {
+            verification = await this.verifyTaskCreation(crmResult);
+            if (verification.verified) {
+              await this.recordTaskLifecycle(accountName, task, 'verified', verification);
+            }
+          }
+
+          createdTasks.push(
+            this.sanitizeTaskForResponse(task, {
+              id: crmResult.id,
+              status: crmResult.status || task.status,
+              verification
+            })
+          );
+        } catch (error) {
+          failedTasks.push({
+            clientReferenceId: task.clientReferenceId,
+            subject: task.subject,
+            error: error.message
+          });
+          await this.recordTaskLifecycle(accountName, task, 'failed', { error: error.message });
+        }
       }
 
-      this.logger.info('✅ Tasks created in CRM', {
-        accountName,
-        taskCount: createdTasks.length,
-        crmType: this.crmType
-      });
+      const successCount = createdTasks.length;
+      const responseStatus = successCount > 0 ? 'success' : 'failed';
+      const partialFailure = successCount > 0 && failedTasks.length > 0;
 
-      const ok = {
+      const response = {
         action: 'createTasks',
-        status: 'success',
+        status: responseStatus,
+        partialFailure,
+        taskCount: successCount,
+        failedTaskCount: failedTasks.length,
         createdTasks,
-        taskCount: createdTasks.length,
+        failedTasks,
+        accountId,
         createdAt: new Date().toISOString()
       };
-      statusService.record('crm', { account: accountName, action: 'createTasks', ok: true, count: (createdTasks||[]).length });
-      return ok;
-    } else {
-      // Mock mode
-      this.logger.info('📋 Tasks created (mock mode)', {
-        accountName,
-        tasks: tasks.map(t => t.subject)
+
+      statusService.record('crm', {
+        account: accountName,
+        action: 'createTasks',
+        ok: successCount > 0,
+        count: successCount,
+        failed: failedTasks.length,
+        mode: 'live'
       });
 
-      const ok = {
+      return response;
+    } else {
+      const mockTasks = [];
+      const timestamp = Date.now();
+
+      for (let index = 0; index < tasks.length; index++) {
+        const task = tasks[index];
+        const mockId = `mock-task-${timestamp}-${index}`;
+        mockTasks.push(
+          this.sanitizeTaskForResponse(task, {
+            id: mockId,
+            verification: { verified: false, status: 'mock-mode' }
+          })
+        );
+        await this.recordTaskLifecycle(accountName, task, 'created', {
+          id: mockId,
+          status: task.status,
+          mode: 'mock'
+        });
+      }
+
+      statusService.record('crm', {
+        account: accountName,
+        action: 'createTasks',
+        ok: true,
+        count: mockTasks.length,
+        mode: 'mock'
+      });
+
+      return {
         action: 'createTasks',
         status: 'success',
-        tasks: tasks.map(t => ({ ...t, id: `mock-task-${Date.now()}` })),
-        taskCount: tasks.length,
+        taskCount: mockTasks.length,
+        tasks: mockTasks,
+        accountId,
         createdAt: new Date().toISOString(),
         mode: 'mock'
       };
-      statusService.record('crm', { account: accountName, action: 'createTasks', ok: true, count: tasks.length, mode: 'mock' });
-      return ok;
+    }
+  }
+
+  async buildTaskPayloads(accountPlan, config, context, maxTasks = 5) {
+    const recommendations = accountPlan.strategicRecommendations || {};
+    const phasesToInclude = new Set(
+      Array.isArray(config.taskPhases) && config.taskPhases.length > 0
+        ? config.taskPhases
+        : ['immediate']
+    );
+
+    if (config.includeShortTerm) phasesToInclude.add('shortTerm');
+    if (config.includeLongTerm) phasesToInclude.add('longTerm');
+
+    const phaseSettings = [
+      { key: 'immediate', items: recommendations.immediate || [], limit: config.maxImmediateTasks ?? 3 },
+      { key: 'shortTerm', items: recommendations.shortTerm || [], limit: config.maxShortTermTasks ?? 3 },
+      { key: 'longTerm', items: recommendations.longTerm || [], limit: config.maxLongTermTasks ?? 2 }
+    ];
+
+    const tasks = [];
+    const tasksByAction = new Map();
+    let sequence = 1;
+
+    for (const phase of phaseSettings) {
+      if (!phasesToInclude.has(phase.key)) continue;
+
+      const phaseItems = phase.items.slice(0, phase.limit);
+      for (const rec of phaseItems) {
+        if (!rec || typeof rec !== 'object' || !rec.action) continue;
+        if (tasks.length >= maxTasks) break;
+
+        const priorityInfo = this.determineTaskPriority(rec, accountPlan);
+        const ownerInfo = await this.resolveTaskOwner(rec, config, priorityInfo.priority);
+        const dependencies = this.determineDependencies(
+          rec,
+          config,
+          tasks,
+          tasksByAction,
+          phase.key
+        );
+
+        const clientReferenceId = this.generateClientReferenceId(
+          context.accountName,
+          context.executionId,
+          rec.action,
+          sequence
+        );
+
+        const task = {
+          subject: `AI Recommendation: ${rec.action}`,
+          description: this.buildTaskDescription(
+            context.accountName,
+            rec,
+            priorityInfo,
+            dependencies,
+            context.executionId,
+            clientReferenceId
+          ),
+          priority: priorityInfo.priority,
+          priorityScore: priorityInfo.score,
+          priorityReason: priorityInfo.reason,
+          dueDate: this.calculateDueDate(rec.timeline),
+          status: this.crmDefaults.defaultStatus || 'Not Started',
+          ownerId: ownerInfo.ownerId,
+          ownerSource: ownerInfo.source,
+          ownerFallbackId: ownerInfo.fallbackOwnerId,
+          accountId: context.accountId,
+          accountName: context.accountName,
+          type: rec.type || this.crmDefaults.defaultType || 'AI Generated Task',
+          dependencies,
+          relatedRisks: priorityInfo.relatedRisks,
+          relatedOpportunities: priorityInfo.relatedOpportunities,
+          escalation: this.buildEscalationPlan(priorityInfo.priority, ownerInfo, config),
+          rationale: rec.rationale,
+          expectedOutcome: rec.expectedOutcome,
+          resources: Array.isArray(rec.resources) ? rec.resources : [],
+          timeline: rec.timeline,
+          phase: phase.key,
+          sequence,
+          executionId: context.executionId,
+          clientReferenceId
+        };
+
+        tasks.push(task);
+        tasksByAction.set(this.normalizeKey(rec.action), clientReferenceId);
+        sequence += 1;
+      }
+    }
+
+    return tasks;
+  }
+
+  determineTaskPriority(recommendation, accountPlan) {
+    const defaultPriority = this.crmDefaults.defaultPriority || 'Medium';
+    let priority = this.normalizePriority(recommendation.priority) || defaultPriority;
+
+    if (!priority) {
+      priority = this.derivePriorityFromTimeline(recommendation.timeline) || defaultPriority;
+    }
+
+    const relatedRisks = this.matchRisks(recommendation, accountPlan);
+    const relatedOpportunities = this.matchOpportunities(recommendation, accountPlan);
+
+    if (relatedRisks.some(risk => (risk.level || '').toLowerCase() === 'critical')) {
+      priority = this.escalatePriority(priority, 'Critical');
+    } else if (relatedRisks.some(risk => (risk.level || '').toLowerCase() === 'high')) {
+      priority = this.escalatePriority(priority, 'High');
+    }
+
+    if (this.containsUrgencyKeywords(recommendation)) {
+      priority = this.escalatePriority(priority, 'High');
+    }
+
+    const score = this.priorityToScore(priority);
+    const reasonParts = [];
+
+    if (relatedRisks.length > 0) {
+      reasonParts.push(`Linked risks: ${relatedRisks.map(r => `${r.type} (${r.level || 'medium'})`).join(', ')}`);
+    }
+
+    if (recommendation.timeline) {
+      reasonParts.push(`Timeline: ${recommendation.timeline}`);
+    }
+
+    if (recommendation.rationale) {
+      reasonParts.push(recommendation.rationale);
+    }
+
+    if (reasonParts.length === 0) {
+      reasonParts.push('Priority derived from recommendation heuristics');
+    }
+
+    return {
+      priority,
+      score,
+      reason: reasonParts.join(' | '),
+      relatedRisks,
+      relatedOpportunities
+    };
+  }
+
+  derivePriorityFromTimeline(timeline) {
+    if (!timeline || typeof timeline !== 'string') return null;
+    const text = timeline.toLowerCase();
+    if (/(hour|day|now|immediate|48|24|urgent|asap)/.test(text)) return 'Critical';
+    if (/(7|week)/.test(text)) return 'High';
+    if (/(14|2 weeks|30|month|quarter)/.test(text)) return 'Medium';
+    return 'Low';
+  }
+
+  containsUrgencyKeywords(recommendation) {
+    const text = `${recommendation.action || ''} ${recommendation.rationale || ''}`.toLowerCase();
+    return /(renewal|churn|risk|escalat|critical|urgent|breach|compliance)/.test(text);
+  }
+
+  matchRisks(recommendation, accountPlan) {
+    const text = `${recommendation.action || ''} ${recommendation.rationale || ''} ${recommendation.expectedOutcome || ''}`.toLowerCase();
+    const risks = accountPlan.riskAssessment?.identifiedRisks || [];
+
+    return risks
+      .filter(risk => {
+        const riskText = `${risk.type || ''} ${risk.description || ''}`.toLowerCase();
+        if (!riskText) return false;
+        const typeMatch = (risk.type || '') && text.includes((risk.type || '').toLowerCase());
+        const descriptionMatch = (risk.description || '') && text.includes((risk.description || '').toLowerCase());
+        return typeMatch || descriptionMatch;
+      })
+      .slice(0, 5)
+      .map(risk => ({
+        type: risk.type || 'Account Risk',
+        level: risk.level || 'medium',
+        description: risk.description
+      }));
+  }
+
+  matchOpportunities(recommendation, accountPlan) {
+    const text = `${recommendation.action || ''} ${recommendation.rationale || ''} ${recommendation.expectedOutcome || ''}`.toLowerCase();
+    const opportunities = accountPlan.opportunityAnalysis?.identifiedOpportunities || [];
+
+    return opportunities
+      .filter(opp => {
+        const oppText = `${opp.type || ''} ${opp.reasoning || ''}`.toLowerCase();
+        if (!oppText) return false;
+        const typeMatch = (opp.type || '') && text.includes((opp.type || '').toLowerCase());
+        const reasoningMatch = (opp.reasoning || '') && text.includes((opp.reasoning || '').toLowerCase());
+        return typeMatch || reasoningMatch;
+      })
+      .slice(0, 5)
+      .map(opp => ({
+        type: opp.type || 'Opportunity',
+        value: opp.value,
+        confidence: opp.confidence
+      }));
+  }
+
+  priorityToScore(priority) {
+    const rank = this.priorityRank(priority);
+    return rank * 25; // Normalize to 100 scale
+  }
+
+  escalatePriority(current, target) {
+    const currentRank = this.priorityRank(current);
+    const targetRank = this.priorityRank(target);
+    return targetRank > currentRank ? this.normalizePriority(target) || target : this.normalizePriority(current) || current;
+  }
+
+  priorityRank(priority) {
+    const normalized = this.normalizePriority(priority) || 'Medium';
+    const order = { Low: 1, Medium: 2, High: 3, Critical: 4 };
+    return order[normalized] || 2;
+  }
+
+  normalizePriority(priority) {
+    if (!priority || typeof priority !== 'string') return null;
+    const normalized = this.normalizeKey(priority);
+    if (!normalized) return null;
+    if (normalized.startsWith('crit')) return 'Critical';
+    if (normalized.startsWith('high')) return 'High';
+    if (normalized.startsWith('med')) return 'Medium';
+    if (normalized.startsWith('low')) return 'Low';
+    const mapped = this.crmDefaults.priorityMappings?.[priority] || this.crmDefaults.priorityMappings?.[normalized];
+    return mapped || priority;
+  }
+
+  async resolveTaskOwner(recommendation, runtimeConfig, priority) {
+    const ownerMappings = {
+      ...(this.crmDefaults.ownerMappings || {}),
+      ...(runtimeConfig.ownerMappings || {}),
+      ...(runtimeConfig.owners || {})
+    };
+
+    const normalizedMappings = new Map();
+    for (const [key, value] of Object.entries(ownerMappings)) {
+      normalizedMappings.set(this.normalizeKey(key), value);
+    }
+
+    const candidateKeys = [
+      recommendation.owner,
+      recommendation.ownerRole,
+      recommendation.assignedTo,
+      recommendation.team
+    ];
+
+    let ownerId = null;
+    let source = null;
+
+    for (const candidate of candidateKeys) {
+      if (!candidate) continue;
+      const normalized = this.normalizeKey(candidate);
+      if (normalized && normalizedMappings.has(normalized)) {
+        ownerId = normalizedMappings.get(normalized);
+        source = 'mapping';
+        break;
+      }
+      if (typeof candidate === 'string' && /^[a-z0-9]{12,}$/i.test(candidate)) {
+        ownerId = candidate;
+        source = 'direct';
+        break;
+      }
+    }
+
+    const fallbackOwnerId = runtimeConfig.defaultOwnerId || this.crmDefaults.defaultOwnerId || null;
+
+    if (!ownerId && fallbackOwnerId) {
+      ownerId = fallbackOwnerId;
+      source = 'fallback';
+    }
+
+    if (!ownerId) {
+      ownerId = await this.getDefaultOwnerId();
+      source = 'auto';
+    }
+
+    const escalationConfig = {
+      ...(this.crmDefaults.escalation || {}),
+      ...(runtimeConfig.escalation || {})
+    };
+
+    const threshold = escalationConfig.threshold || this.crmDefaults.escalation?.threshold || 'High';
+    const shouldEscalate = escalationConfig.enabled !== false && this.shouldEscalate(priority, threshold);
+
+    const escalationOwnerId = escalationConfig.ownerId || this.crmDefaults.escalationOwnerId || null;
+    const notify = escalationConfig.notify || [];
+
+    let assignedOwnerId = ownerId;
+    let escalated = false;
+
+    if (shouldEscalate) {
+      escalated = true;
+      if ((source === 'fallback' || source === 'auto') && escalationOwnerId) {
+        assignedOwnerId = escalationOwnerId;
+        source = 'escalation';
+      }
+    }
+
+    return {
+      ownerId: assignedOwnerId,
+      originalOwnerId: ownerId,
+      fallbackOwnerId: fallbackOwnerId || ownerId,
+      source,
+      escalated,
+      escalationOwnerId,
+      notify
+    };
+  }
+
+  shouldEscalate(priority, threshold) {
+    const priorityRank = this.priorityRank(priority);
+    const thresholdRank = this.priorityRank(threshold);
+    return priorityRank >= thresholdRank;
+  }
+
+  determineDependencies(recommendation, runtimeConfig, currentTasks, tasksByAction, phase) {
+    const dependencies = new Set();
+
+    const fromRecommendation = Array.isArray(recommendation.dependencies)
+      ? recommendation.dependencies
+      : [];
+
+    for (const dep of fromRecommendation) {
+      const key = this.normalizeKey(dep);
+      if (key && tasksByAction.has(key)) {
+        dependencies.add(tasksByAction.get(key));
+      }
+    }
+
+    const configDeps = runtimeConfig.dependencies || {};
+    const mappedDeps = configDeps[recommendation.action] || configDeps[this.normalizeKey(recommendation.action)] || [];
+    for (const dep of mappedDeps) {
+      const key = this.normalizeKey(dep);
+      if (key && tasksByAction.has(key)) {
+        dependencies.add(tasksByAction.get(key));
+      }
+    }
+
+    const autoLink = runtimeConfig?.dependency?.autoLinkPhases === true || this.crmDefaults.dependency?.autoLinkPhases;
+    if (autoLink && phase !== 'immediate') {
+      currentTasks
+        .filter(task => task.phase === 'immediate')
+        .forEach(task => dependencies.add(task.clientReferenceId));
+    }
+
+    return Array.from(dependencies);
+  }
+
+  buildTaskDescription(accountName, recommendation, priorityInfo, dependencies, executionId, clientReferenceId) {
+    const details = [
+      `Account: ${accountName}`,
+      `Rationale: ${recommendation.rationale || 'AI generated recommendation'}`,
+      recommendation.expectedOutcome ? `Expected Outcome: ${recommendation.expectedOutcome}` : null,
+      recommendation.timeline ? `Timeline: ${recommendation.timeline}` : null,
+      dependencies.length > 0 ? `Dependencies: ${dependencies.join(', ')}` : 'Dependencies: None',
+      priorityInfo.reason ? `Priority Driver: ${priorityInfo.reason}` : null,
+      priorityInfo.relatedRisks && priorityInfo.relatedRisks.length > 0
+        ? `Related Risks: ${priorityInfo.relatedRisks.map(r => r.type).join(', ')}`
+        : null,
+      priorityInfo.relatedOpportunities && priorityInfo.relatedOpportunities.length > 0
+        ? `Related Opportunities: ${priorityInfo.relatedOpportunities.map(o => o.type).join(', ')}`
+        : null,
+      clientReferenceId ? `Client Reference: ${clientReferenceId}` : null,
+      executionId ? `Execution ID: ${executionId}` : null
+    ];
+
+    return details.filter(Boolean).join('\n');
+  }
+
+  generateClientReferenceId(accountName, executionId, action, sequence) {
+    const base = `${accountName}:${executionId || 'manual'}:${action}:${sequence}`;
+    return createHash('sha1').update(base).digest('hex').slice(0, 16);
+  }
+
+  normalizeKey(value) {
+    if (!value || typeof value !== 'string') return '';
+    return value.toLowerCase().trim();
+  }
+
+  buildEscalationPlan(priority, ownerInfo, runtimeConfig) {
+    if (!ownerInfo.escalated && !(ownerInfo.notify && ownerInfo.notify.length > 0)) {
+      return null;
+    }
+
+    const escalationConfig = {
+      ...(this.crmDefaults.escalation || {}),
+      ...(runtimeConfig.escalation || {})
+    };
+
+    return {
+      triggered: ownerInfo.escalated,
+      threshold: escalationConfig.threshold || this.crmDefaults.escalation?.threshold || 'High',
+      escalationOwnerId: ownerInfo.escalationOwnerId,
+      previousOwnerId: ownerInfo.originalOwnerId,
+      notify: ownerInfo.notify || [],
+      reason: ownerInfo.escalated ? `Priority ${priority} met escalation threshold` : undefined
+    };
+  }
+
+  sanitizeTaskForResponse(task, overrides = {}) {
+    return {
+      id: overrides.id,
+      clientReferenceId: task.clientReferenceId,
+      subject: task.subject,
+      description: task.description,
+      priority: task.priority,
+      priorityScore: task.priorityScore,
+      status: overrides.status || task.status,
+      ownerId: task.ownerId,
+      ownerSource: task.ownerSource,
+      dueDate: task.dueDate,
+      dependencies: task.dependencies,
+      phase: task.phase,
+      accountId: task.accountId,
+      accountName: task.accountName,
+      escalation: task.escalation,
+      relatedRisks: task.relatedRisks,
+      relatedOpportunities: task.relatedOpportunities,
+      verification: overrides.verification || null
+    };
+  }
+
+  async recordTaskLifecycle(accountName, task, stage, data = {}) {
+    try {
+      statusService.record('crmTasks', {
+        account: accountName,
+        stage,
+        task: task.subject,
+        priority: task.priority,
+        owner: task.ownerId,
+        clientReferenceId: task.clientReferenceId,
+        crmType: this.crmType,
+        status: data.status || task.status,
+        id: data.id
+      });
+
+      if (this.redis?.isConnected()) {
+        const ttl = this.crmDefaults.progressTTLSeconds || 604800;
+        const key = `${this.taskNamespace}:${accountName}:${task.clientReferenceId}`;
+        const payload = {
+          stage,
+          crmType: this.crmType,
+          task: {
+            clientReferenceId: task.clientReferenceId,
+            subject: task.subject,
+            priority: task.priority,
+            ownerId: task.ownerId,
+            status: data.status || task.status,
+            dueDate: task.dueDate,
+            dependencies: task.dependencies,
+            phase: task.phase
+          },
+          data: this.sanitizeLifecycleData(data),
+          updatedAt: new Date().toISOString()
+        };
+        await this.redis.setCache(key, payload, ttl);
+      }
+    } catch (error) {
+      this.logger.warn('⚠️ Failed to record task lifecycle event', {
+        stage,
+        error: error.message
+      });
+    }
+  }
+
+  sanitizeLifecycleData(data) {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    const allowedKeys = ['id', 'status', 'mode', 'verified', 'error'];
+    const sanitized = {};
+    for (const key of allowedKeys) {
+      if (key in data) {
+        sanitized[key] = data[key];
+      }
+    }
+    return sanitized;
+  }
+
+  async verifyTaskCreation(taskRecord) {
+    if (!this.crmClient || !taskRecord?.id) {
+      return { verified: false, status: 'skipped' };
+    }
+
+    try {
+      switch (this.crmType) {
+        case 'salesforce': {
+          const { data } = await this.crmClient.get(`/services/data/v61.0/sobjects/Task/${taskRecord.id}`);
+          return {
+            verified: !!data?.Id,
+            status: data?.Status || 'Unknown'
+          };
+        }
+        case 'hubspot': {
+          const { data } = await this.crmClient.get(`/crm/v3/objects/tasks/${taskRecord.id}`);
+          return {
+            verified: !!data?.id,
+            status: data?.properties?.hs_task_status || 'Unknown'
+          };
+        }
+        case 'pipedrive': {
+          const { data } = await this.crmClient.get(`/activities/${taskRecord.id}`);
+          return {
+            verified: !!data?.data?.id,
+            status: data?.data?.done === true ? 'Completed' : 'Not Started'
+          };
+        }
+        default:
+          return { verified: false, status: 'unsupported' };
+      }
+    } catch (error) {
+      this.logger.warn('⚠️ Task verification failed', {
+        taskId: taskRecord.id,
+        crmType: this.crmType,
+        error: error.message
+      });
+      return { verified: false, status: 'error', error: error.message };
     }
   }
 
@@ -461,8 +1123,41 @@ Date: ${new Date().toLocaleString()}
 
   // Helper methods for different CRM systems
   async findAccountId(accountName) {
-    // This would search for the account in the specific CRM
-    return `mock-account-${accountName}`;
+    if (!this.crmClient) {
+      return `mock-account-${accountName}`;
+    }
+
+    try {
+      switch (this.crmType) {
+        case 'salesforce': {
+          const escaped = accountName.replace(/'/g, "\\'");
+          const query = encodeURIComponent(`SELECT Id FROM Account WHERE Name = '${escaped}' LIMIT 1`);
+          const { data } = await this.crmClient.get(`/services/data/v61.0/query?q=${query}`);
+          return data?.records?.[0]?.Id || null;
+        }
+        case 'hubspot': {
+          const payload = {
+            filterGroups: [{ filters: [{ propertyName: 'name', operator: 'EQ', value: accountName }] }],
+            limit: 1
+          };
+          const { data } = await this.crmClient.post('/crm/v3/objects/companies/search', payload);
+          return data?.results?.[0]?.id || null;
+        }
+        case 'pipedrive': {
+          const { data } = await this.crmClient.get(`/organizations/search?term=${encodeURIComponent(accountName)}&limit=1`);
+          return data?.data?.items?.[0]?.item?.id || null;
+        }
+        default:
+          return null;
+      }
+    } catch (error) {
+      this.logger.warn('⚠️ Account lookup failed', {
+        accountName,
+        crmType: this.crmType,
+        error: error.message
+      });
+      return null;
+    }
   }
 
   async updateSalesforceAccount(accountId, updateData) {
@@ -478,8 +1173,95 @@ Date: ${new Date().toLocaleString()}
   }
 
   async createCRMTask(taskData) {
-    // Implementation would depend on CRM type
-    return { id: `mock-task-${Date.now()}`, ...taskData };
+    if (!this.crmClient) {
+      return { id: `mock-task-${Date.now()}`, status: taskData.status, clientReferenceId: taskData.clientReferenceId };
+    }
+
+    try {
+      switch (this.crmType) {
+        case 'salesforce': {
+          const payload = {
+            Subject: taskData.subject,
+            Description: taskData.description,
+            Priority: this.mapPriorityToSalesforce(taskData.priority),
+            Status: this.mapStatusToSalesforce(taskData.status),
+            ActivityDate: taskData.dueDate ? taskData.dueDate.split('T')[0] : undefined,
+            OwnerId: taskData.ownerId,
+            WhatId: taskData.accountId,
+            Type: taskData.type || 'Task'
+          };
+
+          Object.keys(payload).forEach(key => {
+            if (payload[key] === undefined || payload[key] === null) {
+              delete payload[key];
+            }
+          });
+
+          const { data } = await this.crmClient.post('/services/data/v61.0/sobjects/Task', payload);
+          return {
+            id: data?.id,
+            status: payload.Status,
+            ownerId: payload.OwnerId,
+            priority: payload.Priority,
+            clientReferenceId: taskData.clientReferenceId
+          };
+        }
+
+        case 'hubspot': {
+          const payload = {
+            properties: {
+              hs_task_subject: taskData.subject,
+              hs_task_body: taskData.description,
+              hs_task_priority: this.mapPriorityToHubspot(taskData.priority),
+              hs_task_status: this.mapStatusToHubspot(taskData.status),
+              hs_timestamp: taskData.dueDate || new Date().toISOString()
+            }
+          };
+
+          if (taskData.ownerId) {
+            payload.properties.hubspot_owner_id = taskData.ownerId;
+          }
+
+          const { data } = await this.crmClient.post('/crm/v3/objects/tasks', payload);
+          return {
+            id: data?.id,
+            status: data?.properties?.hs_task_status || payload.properties.hs_task_status,
+            ownerId: payload.properties.hubspot_owner_id,
+            priority: payload.properties.hs_task_priority,
+            clientReferenceId: taskData.clientReferenceId
+          };
+        }
+
+        case 'pipedrive': {
+          const payload = {
+            subject: taskData.subject,
+            type: 'task',
+            note: taskData.description,
+            due_date: taskData.dueDate ? taskData.dueDate.split('T')[0] : undefined,
+            due_time: '09:00',
+            duration: '00:30',
+            user_id: taskData.ownerId,
+            org_id: taskData.accountId,
+            done: 0,
+            priority: this.mapPriorityToPipedrive(taskData.priority)
+          };
+
+          const { data } = await this.crmClient.post('/activities', payload);
+          return {
+            id: data?.data?.id,
+            status: data?.data?.done ? 'Completed' : taskData.status,
+            ownerId: payload.user_id,
+            priority: taskData.priority,
+            clientReferenceId: taskData.clientReferenceId
+          };
+        }
+
+        default:
+          return { id: `mock-task-${Date.now()}`, status: taskData.status, clientReferenceId: taskData.clientReferenceId };
+      }
+    } catch (error) {
+      throw new Error(`Failed to create ${this.crmType} task: ${error.message}`);
+    }
   }
 
   async createCRMOpportunity(oppData) {
@@ -495,6 +1277,73 @@ Date: ${new Date().toLocaleString()}
   async createCRMNote(noteData) {
     // Implementation would depend on CRM type
     return { id: `mock-note-${Date.now()}`, ...noteData };
+  }
+
+  mapPriorityToSalesforce(priority) {
+    const normalized = this.normalizePriority(priority) || 'Medium';
+    const mapping = {
+      Critical: 'High',
+      High: 'High',
+      Medium: 'Normal',
+      Low: 'Low'
+    };
+    return mapping[normalized] || 'Normal';
+  }
+
+  mapStatusToSalesforce(status) {
+    const normalized = this.normalizeStatus(status);
+    const mapping = {
+      Completed: 'Completed',
+      'In Progress': 'In Progress',
+      Waiting: 'Waiting on someone else',
+      Deferred: 'Deferred',
+      'Not Started': 'Not Started'
+    };
+    return mapping[normalized] || 'Not Started';
+  }
+
+  mapPriorityToHubspot(priority) {
+    const normalized = this.normalizePriority(priority) || 'Medium';
+    const mapping = {
+      Critical: 'HIGH',
+      High: 'HIGH',
+      Medium: 'MEDIUM',
+      Low: 'LOW'
+    };
+    return mapping[normalized] || 'MEDIUM';
+  }
+
+  mapStatusToHubspot(status) {
+    const normalized = this.normalizeStatus(status);
+    const mapping = {
+      Completed: 'COMPLETED',
+      'In Progress': 'IN_PROGRESS',
+      Waiting: 'WAITING',
+      Deferred: 'DEFERRED',
+      'Not Started': 'NOT_STARTED'
+    };
+    return mapping[normalized] || 'NOT_STARTED';
+  }
+
+  mapPriorityToPipedrive(priority) {
+    const normalized = this.normalizePriority(priority) || 'Medium';
+    const mapping = {
+      Critical: 2,
+      High: 2,
+      Medium: 1,
+      Low: 0
+    };
+    return mapping[normalized] ?? 1;
+  }
+
+  normalizeStatus(status) {
+    if (!status || typeof status !== 'string') return 'Not Started';
+    const normalized = this.normalizeKey(status);
+    if (normalized.includes('complete') || normalized.includes('done')) return 'Completed';
+    if (normalized.includes('progress')) return 'In Progress';
+    if (normalized.includes('wait')) return 'Waiting';
+    if (normalized.includes('defer')) return 'Deferred';
+    return 'Not Started';
   }
 
   calculateNextReviewDate(healthScore, risks) {
@@ -536,7 +1385,42 @@ Date: ${new Date().toLocaleString()}
   }
 
   async getDefaultOwnerId() {
-    // This would get the default owner ID from the CRM
-    return 'default-owner-id';
+    if (this.crmDefaults?.defaultOwnerId) {
+      return this.crmDefaults.defaultOwnerId;
+    }
+
+    if (process.env.CRM_TASK_DEFAULT_OWNER_ID) {
+      return process.env.CRM_TASK_DEFAULT_OWNER_ID;
+    }
+
+    if (!this.crmClient) {
+      return 'default-owner-id';
+    }
+
+    try {
+      switch (this.crmType) {
+        case 'salesforce': {
+          const query = encodeURIComponent("SELECT Id FROM User WHERE IsActive = true ORDER BY LastLoginDate DESC LIMIT 1");
+          const { data } = await this.crmClient.get(`/services/data/v61.0/query?q=${query}`);
+          return data?.records?.[0]?.Id || 'default-owner-id';
+        }
+        case 'hubspot': {
+          const { data } = await this.crmClient.get('/crm/v3/owners?limit=1');
+          return data?.results?.[0]?.id || 'default-owner-id';
+        }
+        case 'pipedrive': {
+          const { data } = await this.crmClient.get('/users/me');
+          return data?.data?.id || 'default-owner-id';
+        }
+        default:
+          return 'default-owner-id';
+      }
+    } catch (error) {
+      this.logger.warn('⚠️ Unable to resolve default owner from CRM', {
+        crmType: this.crmType,
+        error: error.message
+      });
+      return 'default-owner-id';
+    }
   }
 }

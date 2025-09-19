@@ -50,7 +50,7 @@
                             <div class="system-grid">
                                 <div class="form-group">
                                     <label>Provider</label>
-                                    <select id="chat_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
+                                    <select id="chat_provider" class="hidden"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
                                     <div class="provider-choices" id="chat_provider_cards" style="margin-top:6px;">
                                         <button type="button" class="provider-card" data-provider="openai">
                                             <img src="/static/img/models/openai.png" alt="OpenAI">
@@ -66,98 +66,17 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label>Model (optional)</label>
-                                    <input id="chat_model" placeholder="leave empty for defaults" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Use Tools</label>
-                                    <select id="chat_tools"><option value="false">No</option><option value="true">Yes</option></select>
-                                </div>
+                                <!-- Model input removed; default models will be used -->
+                                <!-- Tools toggle removed on demo chat -->
                             </div>
                             <div class="chat-box" id="chat_box"></div>
                             <div class="demo-controls">
-                                <div class="input-group" style="flex:1"><input id="chat_input" placeholder="Type a message and press Send..." /></div>
+                                <div class="input-group" style="flex:1"><input id="chat_input" placeholder="type a message" /></div>
                                 <button id="chat_send" class="primary-button">Send</button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Demo Generator -->
-                    <div class="system-card" id="demo">
-                        <div class="card-header"><h3><i class="fas fa-share-alt"></i> Demo: Generate & Distribute Account Plan</h3></div>
-                        <div class="card-content">
-                            <div class="system-grid">
-                                <div class="form-group"><label>Account Name</label><input id="demo_account" placeholder="e.g., contoso" /></div>
-                                <div class="form-group"><label>Provider</label><select id="demo_provider"><option value="mixed">mixed</option><option value="openai">openai</option><option value="anthropic">anthropic</option></select></div>
-                                <div class="form-group"><label>Model (optional)</label><input id="demo_model" placeholder="leave empty for defaults" /></div>
-                            </div>
-                            <label>Agent Instructor Directives</label>
-                            <textarea id="demo_instructions" placeholder="Explain how the plan should be framed (tone, priorities, constraints)..."></textarea>
-
-                            <div class="system-grid">
-                                <div class="form-group">
-                                    <label>Slack</label>
-                                    <div class="system-grid">
-                                        <div style="display:flex;align-items:center;gap:8px"><label class="switch"><input type="checkbox" id="slack_enable" /><span class="slider"></span></label><span>Enable</span></div>
-                                        <div><input id="slack_channel" placeholder="#account-planning" /></div>
-                                        <div>
-                                            <select id="slack_format"><option value="summary">summary</option><option value="detailed">detailed</option><option value="alert">alert</option><option value="dealflow">dealflow</option></select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Email</label>
-                                    <div class="system-grid">
-                                        <div style="display:flex;align-items:center;gap:8px"><label class="switch"><input type="checkbox" id="email_enable" /><span class="slider"></span></label><span>Enable</span></div>
-                                        <div><input id="email_recipients" placeholder="demo@example.com, team@example.com" /></div>
-                                        <div><select id="email_template"><option value="executive">executive</option><option value="summary">summary</option><option value="detailed">detailed</option></select></div>
-                                    </div>
-                                    <input id="email_subject" placeholder="Subject (optional)" />
-                                </div>
-                                <div class="form-group">
-                                    <label>CRM</label>
-                                    <div>
-                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><label class="switch"><input type="checkbox" id="crm_enable" /><span class="slider"></span></label><span>Enable</span></div>
-                                        <div>
-                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="updateAccount" checked /><span>Update Account</span></label>
-                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="createTasks" /><span>Create Tasks</span></label>
-                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="updateOpportunities" /><span>Update Opportunities</span></label>
-                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="logActivity" /><span>Log Activity</span></label>
-                                            <label class="chip-toggle"><input type="checkbox" class="crm_action" value="createNotes" /><span>Create Notes</span></label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="demo-controls" style="gap:8px;align-items:flex-end">
-                                <div class="input-group" style="max-width:280px">
-                                    <label for="demo_cron">Schedule (cron optional)</label>
-                                    <input id="demo_cron" placeholder="e.g., 0 9 * * *" />
-                                </div>
-                                <button id="demo_generate" class="secondary-button">Generate Plan (Preview)</button>
-                                <button id="demo_distribute" class="primary-button">Generate + Distribute</button>
-                                <button id="demo_save_workflow" class="secondary-button"><i class="fas fa-save"></i> Save as Workflow</button>
-                                <button id="demo_save_enable" class="secondary-button"><i class="fas fa-calendar"></i> Save + Enable Schedule</button>
-                            </div>
-                            <div class="system-grid">
-                                <div class="system-card" style="flex:1">
-                                    <div class="card-header">
-                                        <strong>Plan Preview</strong>
-                                        <div class="header-actions">
-                                            <button class="secondary-button" id="btnCopyPlan" title="Copy JSON"><i class="fas fa-copy"></i></button>
-                                            <button class="secondary-button" id="btnDownloadPlan" title="Download JSON"><i class="fas fa-download"></i></button>
-                                        </div>
-                                    </div>
-                                    <div id="demo_plan" class="demo-results" style="min-height:220px"></div>
-                                </div>
-                                <div class="system-card" style="flex:1">
-                                    <div class="card-header"><strong>Distribution Results</strong></div>
-                                    <div id="demo_dist" class="demo-results" style="height:220px"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Demo Generator removed per request -->
                 </div>
             </div>
 
@@ -610,6 +529,26 @@
                                             <div class="tile-content">Trigger weekly hygiene sweep → Slack summary + CRM tasks</div>
                                         </div>
                                     </div>
+                                    <div class="partner-connection" style="margin-top:12px">
+                                        <div class="connection-controls">
+                                            <input class="token-input" type="password" id="peopleaiToken" placeholder="Enter API token (demo)" />
+                                            <button class="primary-button" id="peopleaiConnectBtn"><i class="fas fa-plug"></i> Connect</button>
+                                            <button class="secondary-button" id="peopleaiDisconnectBtn"><i class="fas fa-unlink"></i> Disconnect</button>
+                                            <button class="secondary-button" id="peopleaiSyncBtn"><i class="fas fa-sync"></i> Sync</button>
+                                            <span id="peopleaiConnPill" class="status-pill">Status: Offline</span>
+                                        </div>
+                                        <div id="peopleaiStatusBox" class="result-item" style="margin-top:10px">
+                                            <div class="result-header">People.ai Status</div>
+                                            <div class="result-content">Not connected</div>
+                                        </div>
+                                        <div id="peopleaiKpis" class="kpi-grid"></div>
+                                    </div>
+                                    <div class="partner-preview" style="margin-top:12px">
+                                        <div class="preview-tile" style="grid-column: 1 / -1;">
+                                            <div class="tile-title">Recent People.ai Signals</div>
+                                            <ul id="peopleaiSignals" class="feed-list signals-list"></ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -699,24 +638,7 @@
           });
           setActive(sel.value||'mixed');
         })();
-        // Enhance chat tools select to segmented
-        (function(){
-          const sel = box('chat_tools');
-          if (!sel) return;
-          const parent = sel.parentElement;
-          const wrap = document.createElement('div');
-          wrap.className = 'segmented';
-          wrap.id = 'chat_tools_segmented';
-          const mk = (label, value) => { const b = document.createElement('button'); b.type='button'; b.className='seg'; b.dataset.value = value; b.textContent = label; return b; };
-          const bNo = mk('No', 'false');
-          const bYes = mk('Yes', 'true');
-          wrap.appendChild(bNo); wrap.appendChild(bYes);
-          parent.insertBefore(wrap, sel.nextSibling);
-          sel.classList.add('hidden');
-          const setActive = (v) => { [bNo,bYes].forEach(b=>b.classList.toggle('active', b.dataset.value===v)); };
-          setActive(sel.value || 'false');
-          [bNo,bYes].forEach(b=>b.addEventListener('click', ()=>{ sel.value = b.dataset.value; setActive(sel.value); }));
-        })();
+        // No tools toggle on demo chat
         if (box('chat_send')) {
           const chat = [];
           const add = (role, content) => {
@@ -731,11 +653,11 @@
             const text = box('chat_input').value.trim();
             if (!text) return; box('chat_input').value = '';
             add('user', text);
+            const modelInput = box('chat_model');
             const body = {
               messages: chat,
               provider: box('chat_provider').value,
-              modelName: box('chat_model').value.trim() || undefined,
-              useTools: box('chat_tools').value === 'true'
+              modelName: modelInput && modelInput.value ? (modelInput.value.trim() || undefined) : undefined
             };
             const res = await fetch('/settings/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
             const j = await res.json();

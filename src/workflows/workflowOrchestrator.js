@@ -11,6 +11,7 @@ import { GraphService } from '../services/graphService.js';
 import { PostgresService } from '../services/postgresService.js';
 import { SupabaseService } from '../services/supabaseService.js';
 import { v4 as uuidv4 } from 'uuid';
+import { ReminderService } from '../services/reminderService.js';
 
 export class WorkflowOrchestrator {
   constructor(config) {
@@ -40,6 +41,9 @@ export class WorkflowOrchestrator {
     this.graphService = null;
     this.postgresService = null;
     this.supabaseService = null;
+
+    // Reminder coordination
+    this.reminderService = new ReminderService(config, this);
   }
 
   async initialize() {
@@ -117,6 +121,16 @@ export class WorkflowOrchestrator {
       this.logger.info('✅ Workflow Orchestrator initialized successfully', {
         n8nEnabled: this.n8nEnabled
       });
+
+      if (this.reminderService?.isEnabled()) {
+        try {
+          await this.reminderService.initialize();
+        } catch (reminderError) {
+          this.logger.warn('⚠️ Reminder service initialization failed, continuing without automated reminders', {
+            error: reminderError.message
+          });
+        }
+      }
     } catch (error) {
       this.logger.error('❌ Failed to initialize Workflow Orchestrator', {
         error: error.message,
@@ -338,6 +352,7 @@ export class WorkflowOrchestrator {
   // Execute workflow using internal engine
   async executeInternalWorkflow(workflow, context, executionId) {
     const results = [];
+    const workflowContext = { ...context, workflowId: workflow.id, workflowName: workflow.name };
 
     // Process each account in the workflow
     for (const accountConfig of workflow.accounts) {
@@ -345,7 +360,7 @@ export class WorkflowOrchestrator {
         accountConfig, 
         workflow.distributors,
         executionId,
-        context
+        workflowContext
       );
       results.push(accountResult);
     }
@@ -507,6 +522,24 @@ export class WorkflowOrchestrator {
         accountName,
         executionId
       );
+
+      if (this.reminderService?.isEnabled()) {
+        try {
+          await this.reminderService.handleAccountPlanResult({
+            accountPlan: customizedPlan,
+            distributionResults,
+            accountConfig,
+            workflowContext: context,
+            executionId
+          });
+        } catch (reminderError) {
+          this.logger.warn('⚠️ Reminder processing failed', {
+            accountName,
+            executionId,
+            error: reminderError.message
+          });
+        }
+      }
 
       return {
         accountName,
@@ -864,6 +897,10 @@ export class WorkflowOrchestrator {
         await this.klavisN8nBridge.shutdown();
       }
       await this.n8nService.shutdown();
+    }
+
+    if (this.reminderService?.isEnabled()) {
+      await this.reminderService.shutdown();
     }
     
     this.logger.info('✅ Workflow Orchestrator shutdown complete');

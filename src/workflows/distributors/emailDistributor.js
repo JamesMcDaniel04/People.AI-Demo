@@ -138,6 +138,49 @@ export class EmailDistributor {
     }
   }
 
+  async sendReminder(reminder, channelConfig = {}, options = {}) {
+    const escalate = options.escalate === true;
+    const configuredRecipients = escalate
+      ? (channelConfig.recipients || this.config?.reminders?.escalationEmailRecipients)
+      : (channelConfig.recipients || this.config?.reminders?.defaultEmailRecipients);
+    const recipients = this.normalizeReminderRecipients(configuredRecipients);
+
+    if (recipients.length === 0) {
+      this.logger.warn('⚠️ Reminder email skipped (no recipients)', {
+        account: reminder.accountName,
+        priority: reminder.priority,
+        escalation: escalate
+      });
+      return { status: 'skipped', reason: 'no-recipients' };
+    }
+
+    const subject = channelConfig.subject
+      || `[Reminder${escalate ? ' Escalation' : ''}] ${reminder.accountName} requires attention`;
+    const content = this.buildReminderEmail(reminder, escalate);
+    const results = [];
+
+    for (const recipient of recipients) {
+      const result = await this.sendEmail(
+        recipient,
+        subject,
+        content,
+        null,
+        {
+          accountName: reminder.accountName,
+          executionId: reminder.context?.executionId || `reminder-${reminder.id}`
+        }
+      );
+      results.push(result);
+    }
+
+    const sentCount = results.filter(r => r.status === 'sent').length;
+    return {
+      status: sentCount === recipients.length ? 'sent' : sentCount > 0 ? 'partial' : 'failed',
+      sentCount,
+      results
+    };
+  }
+
   async sendEmail(recipient, subject, content, accountPlan, context) {
     const { accountName, executionId } = context;
 
@@ -161,6 +204,14 @@ export class EmailDistributor {
         return ok;
       }
 
+      const attachments = accountPlan ? [
+        {
+          Name: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
+          Content: Buffer.from(JSON.stringify(accountPlan, null, 2)).toString('base64'),
+          ContentType: 'application/json'
+        }
+      ] : [];
+
       if (this.postmarkApiKey) {
         // Use Postmark HTTP API
         const emailData = {
@@ -169,15 +220,12 @@ export class EmailDistributor {
           Subject: subject,
           HtmlBody: content.html,
           TextBody: content.text,
-          MessageStream: 'outbound',
-          Attachments: [
-            {
-              Name: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
-              Content: Buffer.from(JSON.stringify(accountPlan, null, 2)).toString('base64'),
-              ContentType: 'application/json'
-            }
-          ]
+          MessageStream: 'outbound'
         };
+
+        if (attachments.length > 0) {
+          emailData.Attachments = attachments;
+        }
 
         const response = await axios.post(`${this.postmarkBaseUrl}/email`, emailData, {
           headers: {
@@ -206,20 +254,23 @@ export class EmailDistributor {
       }
 
       if (this.smtpTransporter) {
-        const response = await this.smtpTransporter.sendMail({
+        const mailOptions = {
           from: this.fromEmail,
           to: recipient.email,
           subject,
           html: content.html,
-          text: content.text,
-          attachments: [
-            {
-              filename: `${accountName}-account-plan-${new Date().toISOString().split('T')[0]}.json`,
-              content: JSON.stringify(accountPlan, null, 2),
-              contentType: 'application/json'
-            }
-          ]
-        });
+          text: content.text
+        };
+
+        if (attachments.length > 0) {
+          mailOptions.attachments = attachments.map(item => ({
+            filename: item.Name,
+            content: Buffer.from(item.Content, 'base64'),
+            contentType: item.ContentType
+          }));
+        }
+
+        const response = await this.smtpTransporter.sendMail(mailOptions);
 
         this.logger.info('✅ Email sent via SMTP', {
           recipient: recipient.email,
@@ -259,6 +310,70 @@ export class EmailDistributor {
       };
       statusService.record('email', { account: accountName, recipient: recipient.email, ok: false, error: error.message });
       return fail;
+    }
+  }
+
+  normalizeReminderRecipients(recipients) {
+    if (!recipients) return [];
+    const list = Array.isArray(recipients) ? recipients : [recipients];
+    const normalized = list
+      .map(entry => {
+        if (!entry) return null;
+        if (typeof entry === 'string') return entry.trim();
+        if (typeof entry === 'object' && entry.email) return String(entry.email).trim();
+        return null;
+      })
+      .filter(Boolean);
+    const unique = Array.from(new Set(normalized));
+    return unique.map(email => ({ email }));
+  }
+
+  buildReminderEmail(reminder, escalate) {
+    const dueText = this.formatReminderDue(reminder.dueAt);
+    const priority = (reminder.priority || 'medium').toUpperCase();
+    const headline = escalate ? 'Escalated Reminder' : 'Account Reminder';
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; padding:16px;">
+        <h2 style="margin:0 0 12px 0;">${headline}: ${reminder.accountName}</h2>
+        <p style="margin:0 0 12px 0;">Priority <strong>${priority}</strong> · Due <strong>${dueText}</strong></p>
+        <p style="margin:0 0 12px 0;">${reminder.reason || 'Follow up required based on latest account insights.'}</p>
+        <div style="background:#f7f7f9; border-radius:6px; padding:12px; margin-bottom:12px;">
+          <p style="margin:0 0 8px 0;"><strong>Recommended Action</strong></p>
+          <p style="margin:0;">${reminder.recommendedAction || 'Review the account plan and contact stakeholders.'}</p>
+        </div>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr>
+            <td style="padding:6px 0; font-size:14px;">Health Score</td>
+            <td style="padding:6px 0; font-size:14px;"><strong>${reminder.healthScore ?? 'N/A'}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0; font-size:14px;">Status</td>
+            <td style="padding:6px 0; font-size:14px;">${reminder.status || 'scheduled'}</td>
+          </tr>
+          ${reminder.context?.workflowName ? `<tr><td style="padding:6px 0; font-size:14px;">Workflow</td><td style="padding:6px 0; font-size:14px;">${reminder.context.workflowName}</td></tr>` : ''}
+        </table>
+      </div>
+    `;
+
+    const text = [
+      `${headline}: ${reminder.accountName}`,
+      `Priority: ${priority}`,
+      `Due: ${dueText}`,
+      `Reason: ${reminder.reason || 'Follow up required.'}`,
+      `Next step: ${reminder.recommendedAction || 'Review the account plan and engage stakeholders.'}`
+    ].join('\n');
+
+    return { html, text };
+  }
+
+  formatReminderDue(dueAt) {
+    if (!dueAt) return 'as soon as possible';
+    const date = new Date(dueAt);
+    if (Number.isNaN(date.getTime())) return 'as soon as possible';
+    try {
+      return date.toLocaleString(undefined, { hour12: true });
+    } catch (_) {
+      return date.toISOString();
     }
   }
 
