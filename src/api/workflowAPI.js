@@ -8,6 +8,8 @@ import { createAuthAPI } from './authAPI.js';
 import { createSettingsAPI } from './settingsAPI.js';
 import { createPeopleAIAPI } from './peopleAIAPI.js';
 import { createInstructorAPI } from './instructorAPI.js';
+import { createCRMAPI } from './crmAPI.js';
+import { createMonitoringAPI } from './monitoringAPI.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
@@ -339,6 +341,15 @@ export class WorkflowAPI {
     this.app.use('/settings', createSettingsAPI(this.orchestrator, this.config));
     // People.ai Demo Integration API (mocked orchestrator integration)
     this.app.use('/peopleai', createPeopleAIAPI(this.orchestrator, this.config));
+
+    // CRM Integration API (live CRM connections and task management)
+    this.app.use('/api/crm', createCRMAPI(this.config));
+
+    // Enhanced Monitoring API (system health, CRM metrics, real-time monitoring)
+    this.app.use('/api/monitoring', createMonitoringAPI(this.config, {
+      alertService: this.alertService,
+      getPostgresService: () => this.orchestrator.postgresService
+    }));
     // Simple chat endpoint backed by configured LLMs
     this.app.post('/settings/chat', async (req, res) => {
       try {

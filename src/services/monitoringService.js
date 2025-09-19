@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { metrics } from './metricsService.js';
 import { statusService } from './statusService.js';
 import { Logger } from '../utils/logger.js';
+import { getLiveCrmService } from './liveCrmService.js';
 
 const DEGRADED_STATES = new Set(['degraded', 'warn']);
 const DOWN_STATES = new Set(['unhealthy', 'critical', 'down']);
@@ -451,6 +452,164 @@ export class MonitoringService extends EventEmitter {
     }).catch(error => {
       this.logger.error('Pipeline alert dispatch failed', { error: error.message });
     });
+  }
+
+  async getCRMStatus() {
+    try {
+      const liveCrmService = getLiveCrmService(this.config);
+      if (!liveCrmService) {
+        return {
+          status: 'unavailable',
+          message: 'CRM service not initialized',
+          connections: {}
+        };
+      }
+
+      const connectionStatus = liveCrmService.getConnectionStatus();
+      const testResults = await liveCrmService.testAllConnections();
+
+      return {
+        status: connectionStatus.activeConnections.length > 0 ? 'operational' : 'degraded',
+        activeConnections: connectionStatus.activeConnections,
+        totalConfigured: connectionStatus.totalConfigured,
+        connections: connectionStatus.status,
+        testResults,
+        lastUpdated: new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error('Failed to get CRM status', { error: error.message });
+      return {
+        status: 'error',
+        error: error.message,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  async getCRMMetrics() {
+    try {
+      const recentMetrics = statusService.getRecentMetrics('crmLive', 24 * 60 * 60 * 1000); // Last 24 hours
+      const taskMetrics = statusService.getRecentMetrics('crmTasks', 24 * 60 * 60 * 1000);
+
+      const summary = {
+        taskCreation: {
+          total: taskMetrics.length,
+          successful: taskMetrics.filter(m => m.ok).length,
+          failed: taskMetrics.filter(m => !m.ok).length,
+          byAccount: this.groupMetricsByAccount(taskMetrics),
+          byCRM: this.groupMetricsByCRM(taskMetrics)
+        },
+        connections: {
+          total: recentMetrics.length,
+          successful: recentMetrics.filter(m => m.ok).length,
+          failed: recentMetrics.filter(m => !m.ok).length,
+          avgDuration: this.calculateAverageDuration(recentMetrics),
+          byCRM: this.groupMetricsByCRM(recentMetrics)
+        },
+        lastUpdated: new Date().toISOString()
+      };
+
+      return summary;
+    } catch (error) {
+      this.logger.error('Failed to get CRM metrics', { error: error.message });
+      return {
+        error: error.message,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  groupMetricsByAccount(metrics) {
+    const grouped = {};
+    for (const metric of metrics) {
+      if (!metric.account) continue;
+      if (!grouped[metric.account]) {
+        grouped[metric.account] = { total: 0, successful: 0, failed: 0 };
+      }
+      grouped[metric.account].total++;
+      if (metric.ok) {
+        grouped[metric.account].successful++;
+      } else {
+        grouped[metric.account].failed++;
+      }
+    }
+    return grouped;
+  }
+
+  groupMetricsByCRM(metrics) {
+    const grouped = {};
+    for (const metric of metrics) {
+      const crm = metric.crm || 'unknown';
+      if (!grouped[crm]) {
+        grouped[crm] = { total: 0, successful: 0, failed: 0, totalDuration: 0, count: 0 };
+      }
+      grouped[crm].total++;
+      if (metric.ok) {
+        grouped[crm].successful++;
+      } else {
+        grouped[crm].failed++;
+      }
+      if (metric.duration) {
+        grouped[crm].totalDuration += metric.duration;
+        grouped[crm].count++;
+      }
+    }
+
+    // Calculate average duration for each CRM
+    for (const crm of Object.keys(grouped)) {
+      if (grouped[crm].count > 0) {
+        grouped[crm].avgDuration = Math.round(grouped[crm].totalDuration / grouped[crm].count);
+      }
+    }
+
+    return grouped;
+  }
+
+  calculateAverageDuration(metrics) {
+    const withDuration = metrics.filter(m => typeof m.duration === 'number');
+    if (withDuration.length === 0) return 0;
+    const total = withDuration.reduce((sum, m) => sum + m.duration, 0);
+    return Math.round(total / withDuration.length);
+  }
+
+  async getSystemHealth() {
+    const components = await this.evaluateAll();
+    const crmStatus = await this.getCRMStatus();
+    const crmMetrics = await this.getCRMMetrics();
+
+    const overallStatus = this.calculateOverallStatus(components, crmStatus);
+
+    return {
+      status: overallStatus,
+      components,
+      crm: crmStatus,
+      crmMetrics,
+      uptime: Date.now() - this.startedAt,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  calculateOverallStatus(components, crmStatus) {
+    const criticalComponents = Object.values(components).filter(c => c.critical);
+    const hasCriticalFailures = criticalComponents.some(c =>
+      DOWN_STATES.has(c.state?.status) || DEGRADED_STATES.has(c.state?.status)
+    );
+
+    if (hasCriticalFailures) return 'critical';
+
+    const hasFailures = Object.values(components).some(c =>
+      DOWN_STATES.has(c.state?.status)
+    );
+
+    if (hasFailures || crmStatus.status === 'degraded') return 'degraded';
+
+    const hasWarnings = Object.values(components).some(c =>
+      DEGRADED_STATES.has(c.state?.status)
+    );
+
+    if (hasWarnings) return 'warning';
+
+    return 'operational';
   }
 }
 

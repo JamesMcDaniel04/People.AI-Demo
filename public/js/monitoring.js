@@ -9,6 +9,8 @@
   const pipelineProvidersEl = document.querySelector('[data-pipeline-providers]');
   const pipelineConflictsEl = document.querySelector('[data-pipeline-conflicts]');
   const pipelineEventsEl = document.querySelector('[data-pipeline-events]');
+  const crmStatusEl = document.querySelector('[data-crm-status]');
+  const crmMetricsEl = document.querySelector('[data-crm-metrics]');
   const triggerBtn = document.querySelector('#trigger-health');
 
   const statusColors = {
@@ -128,6 +130,116 @@
     `;
   };
 
+  const renderCRMStatus = (snapshot) => {
+    if (!crmStatusEl) return;
+    const crmData = snapshot.crm || {};
+    const connections = crmData.connections || {};
+
+    crmStatusEl.innerHTML = '';
+
+    const crmTypes = ['salesforce', 'hubspot', 'pipedrive'];
+    crmTypes.forEach(crmType => {
+      const connection = connections[crmType] || { status: 'unavailable' };
+      const statusClass = connection.status === 'connected' ? 'connected' :
+                         connection.status === 'mock' ? 'mock' : 'failed';
+
+      const card = document.createElement('div');
+      card.className = 'crm-card';
+      card.innerHTML = `
+        <div class="crm-status">
+          <div class="status-dot ${statusClass}"></div>
+          <strong>${crmType.charAt(0).toUpperCase() + crmType.slice(1)}</strong>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Status:</span>
+          <span class="metric-value">${connection.status}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Last Test:</span>
+          <span class="metric-value">${connection.lastTest ? formatDate(connection.lastTest) : '—'}</span>
+        </div>
+        ${connection.error ? `
+          <div class="metric-row">
+            <span class="metric-label">Error:</span>
+            <span class="metric-value failure-rate">${connection.error}</span>
+          </div>
+        ` : ''}
+      `;
+      crmStatusEl.appendChild(card);
+    });
+  };
+
+  const renderCRMMetrics = (snapshot) => {
+    if (!crmMetricsEl) return;
+    const crmMetrics = snapshot.crmMetrics || {};
+    const taskCreation = crmMetrics.taskCreation || {};
+    const connections = crmMetrics.connections || {};
+
+    const successRate = taskCreation.total > 0 ?
+      Math.round((taskCreation.successful / taskCreation.total) * 100) : 0;
+    const connectionSuccessRate = connections.total > 0 ?
+      Math.round((connections.successful / connections.total) * 100) : 0;
+
+    crmMetricsEl.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <div>
+          <div class="metric-row">
+            <span class="metric-label">Tasks Created:</span>
+            <span class="metric-value">${taskCreation.total || 0}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Success Rate:</span>
+            <span class="metric-value success-rate">${successRate}%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Failed:</span>
+            <span class="metric-value failure-rate">${taskCreation.failed || 0}</span>
+          </div>
+        </div>
+        <div>
+          <div class="metric-row">
+            <span class="metric-label">CRM Operations:</span>
+            <span class="metric-value">${connections.total || 0}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Connection Success:</span>
+            <span class="metric-value success-rate">${connectionSuccessRate}%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Avg Duration:</span>
+            <span class="metric-value">${connections.avgDuration ? connections.avgDuration + 'ms' : '—'}</span>
+          </div>
+        </div>
+      </div>
+      ${Object.keys(taskCreation.byCRM || {}).length > 0 ? `
+        <div style="margin-top: 16px;">
+          <h4 style="color: #93c5fd; font-size: 0.9rem; margin-bottom: 8px;">By CRM System:</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+            ${Object.entries(taskCreation.byCRM).map(([crm, stats]) => `
+              <div style="background: rgba(30, 41, 59, 0.3); padding: 8px; border-radius: 6px;">
+                <div style="font-weight: 600; margin-bottom: 4px;">${crm.charAt(0).toUpperCase() + crm.slice(1)}</div>
+                <div class="metric-row" style="margin: 2px 0;">
+                  <span class="metric-label">Total:</span>
+                  <span class="metric-value">${stats.total || 0}</span>
+                </div>
+                <div class="metric-row" style="margin: 2px 0;">
+                  <span class="metric-label">Success:</span>
+                  <span class="metric-value success-rate">${stats.successful || 0}</span>
+                </div>
+                ${stats.avgDuration ? `
+                  <div class="metric-row" style="margin: 2px 0;">
+                    <span class="metric-label">Avg:</span>
+                    <span class="metric-value">${stats.avgDuration}ms</span>
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+  };
+
   const renderPipeline = (snapshot) => {
     if (!pipelineSummaryEl) return;
     const data = snapshot.dataPipeline || {};
@@ -205,12 +317,14 @@
     renderComponents(snapshot);
     renderIncidents(snapshot);
     renderPerformance(snapshot);
+    renderCRMStatus(snapshot);
+    renderCRMMetrics(snapshot);
     renderPipeline(snapshot);
   };
 
   const fetchSnapshot = async () => {
     try {
-      const response = await fetch('/monitoring/dashboard');
+      const response = await fetch('/api/monitoring/health');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
