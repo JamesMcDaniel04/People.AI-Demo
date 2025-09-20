@@ -54,7 +54,7 @@ export class AccountPlannerApp {
         recommendations,
         graphRAGResults
       );
-      
+
       return accountPlan;
       
     } catch (error) {
@@ -166,7 +166,149 @@ export class AccountPlannerApp {
       }
     };
 
-    return plan;
+    const persistenceSnapshot = this.buildPersistenceSnapshot({
+      accountData,
+      analysis,
+      graphRAGResults
+    });
+
+    return { ...plan, ...persistenceSnapshot };
+  }
+
+  buildPersistenceSnapshot({ accountData, analysis, graphRAGResults }) {
+    return {
+      rawData: accountData,
+      opportunities: this.flattenOpportunities(analysis?.opportunities, graphRAGResults),
+      risks: this.flattenRisks(analysis?.risks, graphRAGResults),
+      health: this.summarizeHealth(analysis?.healthScore, graphRAGResults),
+      insights: this.combineInsights(analysis?.insights, graphRAGResults)
+    };
+  }
+
+  flattenOpportunities(aiOpportunities = [], graphRAGResults = null) {
+    const base = (aiOpportunities || []).map((opp, index) => ({
+      id: opp.id || `ai_opp_${index}`,
+      title: opp.title || this.formatOpportunityTitle(opp.type, opp.timeline),
+      description: opp.description || opp.reasoning || 'AI identified opportunity',
+      priority: opp.priority || 'medium',
+      potential_value: typeof opp.value === 'number' ? opp.value : Number(opp.value) || 0,
+      probability: typeof opp.confidence === 'number' ? opp.confidence : Number(opp.confidence) || 0.5,
+      category: opp.category || opp.type || 'general',
+      timeline: opp.timeline || 'Q4 2024',
+      source: opp.source || 'ai_analysis'
+    }));
+
+    if (!graphRAGResults?.insights?.opportunities?.length) {
+      return base;
+    }
+
+    const seenIds = new Set(base.map(item => item.id));
+    const graphOpportunities = graphRAGResults.insights.opportunities
+      .map((insight, index) => ({
+        id: insight.id || `graphrag_opp_${index}`,
+        title: insight.title || insight.summary || 'GraphRAG Opportunity Insight',
+        description: insight.summary || insight.detail || 'Opportunity derived from relationship graph analysis',
+        priority: insight.priority || 'medium',
+        potential_value: insight.estimated_value || 0,
+        probability: typeof insight.confidence === 'number' ? insight.confidence : Number(insight.confidence) || 0.5,
+        category: insight.category || 'graph_insight',
+        timeline: insight.timeline || 'TBD',
+        source: 'graphrag'
+      }))
+      .filter(item => !seenIds.has(item.id));
+
+    return [...base, ...graphOpportunities];
+  }
+
+  flattenRisks(aiRisks = [], graphRAGResults = null) {
+    const base = (aiRisks || []).map((risk, index) => ({
+      id: risk.id || `ai_risk_${index}`,
+      title: risk.title || this.formatRiskTitle(risk.type, risk.level),
+      description: risk.description || 'AI identified risk',
+      severity: risk.level || 'medium',
+      likelihood: typeof risk.probability === 'number' ? risk.probability : Number(risk.probability) || 0.5,
+      category: risk.category || risk.type || 'general',
+      mitigation: risk.mitigation || '',
+      source: risk.source || 'ai_analysis'
+    }));
+
+    if (!graphRAGResults?.insights?.risk_indicators?.length) {
+      return base;
+    }
+
+    const seenIds = new Set(base.map(item => item.id));
+    const graphRisks = graphRAGResults.insights.risk_indicators
+      .map((insight, index) => ({
+        id: insight.id || `graphrag_risk_${index}`,
+        title: insight.title || insight.summary || 'GraphRAG Risk Insight',
+        description: insight.summary || insight.detail || 'Risk signal derived from graph analysis',
+        severity: insight.severity || this.deriveSeverityFromConfidence(insight.confidence),
+        likelihood: typeof insight.confidence === 'number' ? insight.confidence : Number(insight.confidence) || 0.5,
+        category: insight.category || 'graph_insight',
+        mitigation: Array.isArray(insight.recommendations) ? insight.recommendations.join('; ') : (insight.mitigation || ''),
+        source: 'graphrag'
+      }))
+      .filter(item => !seenIds.has(item.id));
+
+    return [...base, ...graphRisks];
+  }
+
+  summarizeHealth(healthScore = {}, graphRAGResults = null) {
+    const health = {
+      overall_score: healthScore.score ?? healthScore.overallScore ?? 0,
+      status: healthScore.overall || healthScore.status || 'unknown',
+      factors: healthScore.factors || {},
+      strengths: healthScore.strengths || [],
+      weaknesses: healthScore.weaknesses || [],
+      trend: healthScore.trend || 'stable'
+    };
+
+    if (graphRAGResults?.insights?.relationship_health?.length) {
+      health.graph_insights = graphRAGResults.insights.relationship_health.map(i => ({
+        summary: i.summary,
+        confidence: i.confidence,
+        category: i.category || 'relationship_health'
+      }));
+    }
+
+    if (graphRAGResults?.graphData?.graphStats) {
+      health.graph_metrics = graphRAGResults.graphData.graphStats;
+    }
+
+    return health;
+  }
+
+  combineInsights(aiInsights = [], graphRAGResults = null) {
+    const structuredAIInsights = Array.isArray(aiInsights) ? aiInsights : [];
+    const graphragSummary = graphRAGResults?.summary || null;
+    const graphragInsights = graphRAGResults?.insights || null;
+
+    return {
+      ai: structuredAIInsights,
+      graph_rag: {
+        summary: graphragSummary,
+        insightsByCategory: graphragInsights,
+        metadata: graphRAGResults?.metadata || {}
+      }
+    };
+  }
+
+  formatOpportunityTitle(type = '', timeline = '') {
+    if (!type) return 'Opportunity';
+    const normalized = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return timeline ? `${normalized} (${timeline})` : normalized;
+  }
+
+  formatRiskTitle(type = '', level = '') {
+    const base = type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Risk';
+    return level ? `${base} (${level})` : base;
+  }
+
+  deriveSeverityFromConfidence(confidence) {
+    const value = typeof confidence === 'number' ? confidence : Number(confidence) || 0;
+    if (value >= 0.75) return 'high';
+    if (value >= 0.5) return 'medium';
+    return 'low';
   }
 
   summarizeDataSources(accountData) {

@@ -21,6 +21,7 @@ export class GraphRAGService extends EventEmitter {
     this.client = null;
     this.initialized = false;
     this.mockMode = false;
+    this._lastPreparedPayload = null;
   }
 
   async initialize() {
@@ -73,14 +74,8 @@ export class GraphRAGService extends EventEmitter {
       console.log(`🧠 Processing account data through GraphRAG: ${accountName}`);
 
       // Step 1: Extract entities and build graph
-      const analysisResult = await this.client.post('/analyze-account', {
-        accountName,
-        emails: accountData.emails || [],
-        calls: accountData.calls || [],
-        stakeholders: accountData.stakeholders || [],
-        documents: accountData.documents || [],
-        interactions: accountData.interactions || []
-      });
+      const payload = this.prepareAccountPayload(accountName, accountData);
+      const analysisResult = await this.client.post('/analyze-account', payload);
 
       const analysis = analysisResult.data;
       console.log(`✅ GraphRAG analysis completed for ${accountName}`);
@@ -111,12 +106,19 @@ export class GraphRAGService extends EventEmitter {
     }
 
     try {
-      const insightsResult = await this.client.post('/graphrag-query', {
+      const queryPayload = {
         accountName,
         query: query || 'Generate comprehensive account insights',
         maxHops: this.config.maxHops,
         includeEmbeddings: true
-      });
+      };
+
+      // If we have recent account context cached, include it for richer insights
+      if (this._lastPreparedPayload?.accountName === accountName) {
+        queryPayload.context = this._lastPreparedPayload;
+      }
+
+      const insightsResult = await this.client.post('/graphrag-query', queryPayload);
 
       return insightsResult.data;
 
@@ -163,12 +165,18 @@ export class GraphRAGService extends EventEmitter {
     try {
       // This would call a semantic search endpoint if available
       // For now, we'll use the main GraphRAG query endpoint
-      const searchResult = await this.client.post('/graphrag-query', {
+      const searchPayload = {
         accountName,
         query,
         maxHops: 1,
         includeEmbeddings: true
-      });
+      };
+
+      if (this._lastPreparedPayload?.accountName === accountName) {
+        searchPayload.context = this._lastPreparedPayload;
+      }
+
+      const searchResult = await this.client.post('/graphrag-query', searchPayload);
 
       return searchResult.data.semanticResults || [];
 
@@ -185,7 +193,7 @@ export class GraphRAGService extends EventEmitter {
       
       // Process account data through GraphRAG
       const graphData = await this.processAccountData(accountName, accountData);
-      
+
       // Generate specific insights for account planning
       const planningQueries = [
         'What are the key stakeholder influence patterns?',
@@ -286,9 +294,10 @@ export class GraphRAGService extends EventEmitter {
 
   // Mock data generators for fallback
   _generateMockGraphData(accountName, accountData) {
-    const emailCount = (accountData.emails || []).length;
-    const callCount = (accountData.calls || []).length;
-    const stakeholderCount = (accountData.stakeholders || []).length;
+    const payload = this.prepareAccountPayload(accountName, accountData);
+    const emailCount = payload.emails.length;
+    const callCount = payload.calls.length;
+    const stakeholderCount = payload.stakeholders.length;
     
     return {
       graphStats: {
@@ -427,5 +436,122 @@ export class GraphRAGService extends EventEmitter {
       serviceUrl: this.config.serviceUrl,
       maxHops: this.config.maxHops
     };
+  }
+
+  prepareAccountPayload(accountName, accountData = {}) {
+    const payload = {
+      accountName,
+      basic: accountData.basic?.data || {},
+      emails: this._flattenSection(accountData.emails, { preserveSource: true }),
+      calls: this._flattenSection(accountData.calls, { preserveSource: true }),
+      stakeholders: this._flattenSection(accountData.stakeholders, { preserveSource: true }),
+      documents: this._flattenSection(accountData.documents, { preserveSource: true }),
+      interactions: this._flattenSection(accountData.interactions, { preserveSource: true }),
+      calendar: this._flattenSection(accountData.calendar, { preserveSource: true }),
+      crm: this._flattenSection(accountData.crm, { preserveSource: true }),
+      financial: this._flattenSection(accountData.financial, { preserveSource: true }),
+      external: this._flattenExternal(accountData.external),
+      metadata: {
+        sources: this._collectSources(accountData)
+      }
+    };
+
+    this._lastPreparedPayload = payload;
+    return payload;
+  }
+
+  _flattenSection(section = [], options = {}) {
+    const preserveSource = options.preserveSource !== false;
+    const sourceKey = options.sourceKey || '_source';
+
+    if (!Array.isArray(section)) {
+      return [];
+    }
+
+    const flattened = [];
+
+    for (const entry of section) {
+      if (!entry || typeof entry !== 'object') continue;
+      const data = entry.data;
+      if (!data) continue;
+
+      const addItem = (item) => {
+        if (!item || typeof item !== 'object') return;
+        const clone = { ...item };
+        if (preserveSource && entry.source && !clone[sourceKey]) {
+          clone[sourceKey] = entry.source;
+        }
+        if (!clone.id && entry.source) {
+          clone.id = `${entry.source}_${flattened.length}`;
+        }
+        flattened.push(clone);
+      };
+
+      if (Array.isArray(data)) {
+        data.forEach(addItem);
+      } else if (typeof data === 'object') {
+        addItem(data);
+      }
+    }
+
+    return flattened;
+  }
+
+  _flattenExternal(externalSection = []) {
+    if (!Array.isArray(externalSection)) {
+      return [];
+    }
+
+    const flattened = [];
+
+    for (const entry of externalSection) {
+      if (!entry || typeof entry !== 'object') continue;
+      const data = entry.data;
+      if (!data) continue;
+
+      const sourceId = entry.source || data.source;
+
+      if (Array.isArray(data)) {
+        data.forEach(item => {
+          if (item && typeof item === 'object') {
+            flattened.push({ ...item, _source: sourceId || item.source || 'external' });
+          }
+        });
+        continue;
+      }
+
+      if (Array.isArray(data.news)) {
+        data.news.forEach(item => {
+          if (item && typeof item === 'object') {
+            flattened.push({ ...item, _source: sourceId || 'external_news' });
+          }
+        });
+      } else if (typeof data === 'object') {
+        flattened.push({ ...data, _source: sourceId || 'external' });
+      }
+    }
+
+    return flattened;
+  }
+
+  _collectSources(accountData = {}) {
+    const sections = ['emails', 'calls', 'stakeholders', 'documents', 'interactions', 'calendar', 'crm', 'financial', 'external'];
+    const sources = new Set();
+
+    for (const section of sections) {
+      const value = accountData[section];
+      if (!Array.isArray(value)) continue;
+      for (const entry of value) {
+        if (entry?.source) {
+          sources.add(entry.source);
+        }
+      }
+    }
+
+    if (accountData.basic?.source) {
+      sources.add(accountData.basic.source);
+    }
+
+    return Array.from(sources);
   }
 }

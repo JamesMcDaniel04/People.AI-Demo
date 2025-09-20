@@ -236,7 +236,13 @@ export class MixedAIService {
     return textBlocks.map(block => block.text).join('\n');
   }
 
-  async analyzeAccountHealth(accountData) {
+  async analyzeAccountHealth(accountData, graphRAGResults = null) {
+    const graphragContext = this._summarizeGraphRAGForPrompt(graphRAGResults, {
+      includeSummary: true,
+      categories: ['relationship_health', 'stakeholder_influence', 'communication_patterns', 'risk_indicators'],
+      maxPerCategory: 5
+    });
+
     const prompt = `
     Analyze the account health based on the following data and provide a comprehensive assessment:
 
@@ -254,6 +260,9 @@ export class MixedAIService {
 
     External Signals (News/Market):
     ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
+    GraphRAG Relationship Intelligence:
+    ${graphragContext}
 
     Please provide:
     1. Overall health score (0-100) with detailed reasoning
@@ -290,22 +299,62 @@ export class MixedAIService {
       return parsedResponse;
     } catch (err) {
       console.warn('Health analysis using fallback due to AI error:', err.message);
-      return {
+      const fallback = {
         overallScore: 75,
-        healthStatus: "good",
+        healthStatus: 'good',
         factors: { financial: 80, engagement: 75, growth: 70, satisfaction: 75 },
-        strengths: ["Strong financial performance", "Active engagement"],
-        weaknesses: ["Growth opportunities exist"],
-        criticalFactors: ["Maintain engagement", "Explore expansion"],
-        trend: "stable",
-        recommendations: ["Continue current strategy", "Explore new opportunities"]
+        strengths: ['Strong financial performance', 'Active engagement'],
+        weaknesses: ['Growth opportunities exist'],
+        criticalFactors: ['Maintain engagement', 'Explore expansion'],
+        trend: 'stable',
+        recommendations: ['Continue current strategy', 'Explore new opportunities']
       };
+
+      if (graphRAGResults?.insights?.relationship_health?.length) {
+        const avgConfidence = this._averageConfidence(graphRAGResults.insights.relationship_health);
+        if (!Number.isNaN(avgConfidence)) {
+          const modifier = (avgConfidence - 0.5) * 20;
+          fallback.overallScore = Math.max(0, Math.min(100, Math.round(fallback.overallScore + modifier)));
+          fallback.healthStatus = fallback.overallScore >= 85 ? 'excellent' : (fallback.overallScore >= 70 ? 'good' : fallback.healthStatus);
+          fallback.trend = avgConfidence >= 0.65 ? 'improving' : fallback.trend;
+        }
+
+        fallback.strengths = [...new Set([
+          ...(fallback.strengths || []),
+          'GraphRAG indicates resilient relationship clusters'
+        ])];
+
+        const topInsight = graphRAGResults.insights.relationship_health[0];
+        if (topInsight?.summary) {
+          fallback.recommendations.push(`Capitalize on relationship insight: ${topInsight.summary}`);
+        }
+      }
+
+      if (graphRAGResults?.insights?.risk_indicators?.length) {
+        fallback.weaknesses = [...new Set([
+          ...(fallback.weaknesses || []),
+          'Graph analytics surfaced relationship risks'
+        ])];
+        fallback.recommendations.push('Initiate mitigation plan for GraphRAG risk indicators');
+      }
+
+      if (graphRAGResults?.summary) {
+        fallback.recommendations.push(`Incorporate GraphRAG findings: ${graphRAGResults.summary}`);
+      }
+
+      return fallback;
     }
   }
 
-  async identifyOpportunities(accountData, healthAnalysis) {
+  async identifyOpportunities(accountData, healthAnalysis, graphRAGResults = null) {
+    const graphragContext = this._summarizeGraphRAGForPrompt(graphRAGResults, {
+      includeSummary: true,
+      categories: ['opportunities', 'stakeholder_influence', 'communication_patterns'],
+      maxPerCategory: 5
+    });
+
     const prompt = `
-    Based on the account data and health analysis, identify specific growth opportunities:
+    Based on the account data, health analysis, and graph intelligence, identify specific growth opportunities:
 
     Account Data:
     ${JSON.stringify(accountData.basic?.data || {}, null, 2)}
@@ -328,6 +377,9 @@ export class MixedAIService {
     Health Analysis:
     ${JSON.stringify(healthAnalysis, null, 2)}
 
+    GraphRAG Insights:
+    ${graphragContext}
+
     Identify specific opportunities for:
     1. Account expansion (new products/services)
     2. Upselling (upgrading existing services)
@@ -341,7 +393,7 @@ export class MixedAIService {
     - Confidence level (0-1)
     - Timeline for realization
     - Key requirements for success
-    - Supporting evidence from the data
+    - Supporting evidence from the combined tabular + graph data
 
     Return as JSON array with this schema:
     [
@@ -355,7 +407,8 @@ export class MixedAIService {
         "priority": "high|medium|low",
         "requirements": ["req1", "req2", ...],
         "evidence": ["evidence1", "evidence2", ...],
-        "reasoning": "Why this opportunity exists"
+        "reasoning": "Why this opportunity exists",
+        "graphSignals": ["GraphRAG evidence identifiers"]
       }
     ]
     `;
@@ -370,24 +423,48 @@ export class MixedAIService {
       return opportunities;
     } catch (err) {
       console.warn('Opportunities using fallback due to AI error:', err.message);
+
+      if (graphRAGResults?.insights?.opportunities?.length) {
+        return graphRAGResults.insights.opportunities.map((insight, index) => ({
+          type: insight.category || 'graph_opportunity',
+          title: insight.title || insight.summary || `GraphRAG Opportunity ${index + 1}`,
+          description: insight.detail || insight.summary || 'Opportunity surfaced by relationship analysis',
+          value: insight.estimated_value || insight.value || 0,
+          confidence: this._normalizeConfidence(insight.confidence, 0.6),
+          timeline: insight.timeline || 'Next 2 quarters',
+          priority: (insight.priority || '').toLowerCase() || (this._normalizeConfidence(insight.confidence, 0.6) >= 0.7 ? 'high' : 'medium'),
+          requirements: Array.isArray(insight.recommendations) ? insight.recommendations : [],
+          evidence: insight.evidence || [],
+          reasoning: insight.summary || 'Identified via GraphRAG analytics',
+          graphSignals: insight.graph_signals || []
+        }));
+      }
+
       return [
         {
-          type: "expansion",
-          title: "Product Line Expansion",
-          description: "Opportunity to introduce additional products",
+          type: 'expansion',
+          title: 'Product Line Expansion',
+          description: 'Opportunity to introduce additional products',
           value: 250000,
           confidence: 0.7,
-          timeline: "Q2 2025",
-          priority: "high",
-          requirements: ["Product readiness", "Client approval"],
-          evidence: ["Strong current performance"],
-          reasoning: "Account shows growth potential"
+          timeline: 'Q2 2025',
+          priority: 'high',
+          requirements: ['Product readiness', 'Client approval'],
+          evidence: ['Strong current performance'],
+          reasoning: 'Account shows growth potential',
+          graphSignals: []
         }
       ];
     }
   }
 
-  async assessRisks(accountData, healthAnalysis, opportunities) {
+  async assessRisks(accountData, healthAnalysis, opportunities, graphRAGResults = null) {
+    const graphragContext = this._summarizeGraphRAGForPrompt(graphRAGResults, {
+      includeSummary: true,
+      categories: ['risk_indicators', 'stakeholder_influence', 'communication_patterns'],
+      maxPerCategory: 5
+    });
+
     const prompt = `
     Conduct a comprehensive risk assessment for this account:
 
@@ -411,6 +488,9 @@ export class MixedAIService {
 
     External Signals (News/Market):
     ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
+    GraphRAG Risk & Relationship Signals:
+    ${graphragContext}
 
     Identify and assess risks in these categories:
     1. Churn risk (likelihood of losing the account)
@@ -452,24 +532,48 @@ export class MixedAIService {
       return risks;
     } catch (err) {
       console.warn('Risks using fallback due to AI error:', err.message);
+      if (graphRAGResults?.insights?.risk_indicators?.length) {
+        return graphRAGResults.insights.risk_indicators.map((insight, index) => {
+          const confidence = this._normalizeConfidence(insight.confidence, 0.5);
+          return {
+            type: insight.category || 'graph_risk',
+            title: insight.title || insight.summary || `GraphRAG Risk ${index + 1}`,
+            description: insight.detail || insight.summary || 'Risk surfaced by graph analysis',
+            probability: confidence,
+            impact: insight.impact || this._impactFromSeverity(insight.severity),
+            level: (insight.severity || '').toLowerCase() || this._severityFromConfidence(confidence),
+            indicators: insight.indicators || insight.signals || [],
+            mitigation: Array.isArray(insight.recommendations) ? insight.recommendations : (insight.mitigation ? [insight.mitigation] : []),
+            monitoring: insight.monitoring || ['Monitor stakeholder engagement'],
+            timeline: insight.timeline || 'Next 2 quarters'
+          };
+        });
+      }
+
       return [
         {
-          type: "competitive",
-          title: "Competitive Pressure",
-          description: "Potential competitive threats in the market",
+          type: 'competitive',
+          title: 'Competitive Pressure',
+          description: 'Potential competitive threats in the market',
           probability: 0.3,
-          impact: "medium",
-          level: "medium",
-          indicators: ["Price sensitivity", "Competitor activity"],
-          mitigation: ["Value demonstration", "Relationship strengthening"],
-          monitoring: ["Regular check-ins", "Market analysis"],
-          timeline: "Q3 2025"
+          impact: 'medium',
+          level: 'medium',
+          indicators: ['Price sensitivity', 'Competitor activity'],
+          mitigation: ['Value demonstration', 'Relationship strengthening'],
+          monitoring: ['Regular check-ins', 'Market analysis'],
+          timeline: 'Q3 2025'
         }
       ];
     }
   }
 
-  async generateStrategicRecommendations(accountData, healthAnalysis, opportunities, risks) {
+  async generateStrategicRecommendations(accountData, healthAnalysis, opportunities, risks, graphRAGResults = null) {
+    const graphragContext = this._summarizeGraphRAGForPrompt(graphRAGResults, {
+      includeSummary: true,
+      categories: ['opportunities', 'risk_indicators', 'relationship_health'],
+      maxPerCategory: 5
+    });
+
     const prompt = `
     Generate comprehensive strategic recommendations for this account:
 
@@ -492,6 +596,9 @@ export class MixedAIService {
     ${risks.filter(risk => risk.level === 'high' || risk.level === 'critical').map(risk =>
       `- ${risk.title}: ${risk.probability ? Math.round(risk.probability * 100) : 30}% probability, ${risk.impact} impact`
     ).join('\n')}
+
+    GraphRAG Insights:
+    ${graphragContext}
 
     Provide strategic recommendations organized by timeline:
 
@@ -547,27 +654,46 @@ export class MixedAIService {
       return parsedResponse;
     } catch (err) {
       console.warn('Recommendations using fallback due to AI error:', err.message);
-      return {
+      const fallback = {
         immediate: [
           {
-            action: "Schedule quarterly business review",
-            rationale: "Strengthen relationship and identify opportunities",
-            outcome: "Improved client satisfaction and visibility",
-            resources: ["Account manager", "Technical team"],
-            owner: "Account Manager",
-            timeline: "Next 30 days",
-            metrics: ["Meeting completion", "Client feedback score"]
+            action: 'Schedule quarterly business review',
+            rationale: 'Strengthen relationship and identify opportunities',
+            outcome: 'Improved client satisfaction and visibility',
+            resources: ['Account manager', 'Technical team'],
+            owner: 'Account Manager',
+            timeline: 'Next 30 days',
+            metrics: ['Meeting completion', 'Client feedback score'],
+            source: 'ai_fallback'
           }
         ],
         shortTerm: [],
         longTerm: [],
-        executiveSummary: "Focus on relationship strengthening and value demonstration",
-        keyPriorities: ["Maintain engagement", "Explore opportunities", "Mitigate risks"]
+        executiveSummary: 'Focus on relationship strengthening and value demonstration',
+        keyPriorities: ['Maintain engagement', 'Explore opportunities', 'Mitigate risks']
       };
+
+      if (graphRAGResults) {
+        const graphActions = this._graphRAGFallbackRecommendations(graphRAGResults);
+        fallback.immediate.push(...graphActions.immediate);
+        fallback.shortTerm.push(...graphActions.shortTerm);
+        fallback.longTerm.push(...graphActions.longTerm);
+        fallback.keyPriorities = [...new Set([...fallback.keyPriorities, ...graphActions.keyPriorities])];
+        if (graphRAGResults.summary) {
+          fallback.executiveSummary = `${fallback.executiveSummary}. GraphRAG: ${graphRAGResults.summary}`;
+        }
+      }
+
+      return fallback;
     }
   }
 
-  async generateInsights(accountData, analysis) {
+  async generateInsights(accountData, analysis, graphRAGResults = null) {
+    const graphragContext = this._summarizeGraphRAGForPrompt(graphRAGResults, {
+      includeSummary: true,
+      maxPerCategory: 4
+    });
+
     const prompt = `
     Generate key insights and actionable intelligence from this account analysis:
 
@@ -594,6 +720,9 @@ export class MixedAIService {
 
     External Signals (News/Market):
     ${JSON.stringify(accountData.external?.[0]?.data || {}, null, 2)}
+
+    GraphRAG Cross-Source Intelligence:
+    ${graphragContext}
 
     Generate insights about:
     1. Communication patterns and sentiment trends
@@ -628,19 +757,218 @@ export class MixedAIService {
       return insights;
     } catch (err) {
       console.warn('Insights using fallback due to AI error:', err.message);
-      return [
+      const baseInsights = [
         {
-          type: "relationship",
-          title: "Strong Client Relationship",
-          description: "Account shows positive engagement patterns",
-          priority: "medium",
+          type: 'relationship',
+          title: 'Strong Client Relationship',
+          description: 'Account shows positive engagement patterns',
+          priority: 'medium',
           actionable: true,
-          evidence: ["Regular communications", "Positive feedback"],
-          implications: ["Good retention likelihood"],
-          recommendations: ["Continue current approach", "Look for expansion opportunities"]
+          evidence: ['Regular communications', 'Positive feedback'],
+          implications: ['Good retention likelihood'],
+          recommendations: ['Continue current approach', 'Look for expansion opportunities'],
+          source: 'ai_fallback'
         }
       ];
+
+      if (graphRAGResults?.insights) {
+        const graphInsights = this._graphRAGInsightsToNarratives(graphRAGResults);
+        baseInsights.push(...graphInsights);
+      }
+
+      return baseInsights;
     }
+  }
+
+  _summarizeGraphRAGForPrompt(graphRAGResults, options = {}) {
+    const { includeSummary = false, categories = null, maxPerCategory = 3 } = options;
+    if (!graphRAGResults) {
+      return 'No GraphRAG insights available.';
+    }
+
+    const lines = [];
+    if (includeSummary && graphRAGResults.summary) {
+      lines.push(`Summary: ${graphRAGResults.summary}`);
+    }
+
+    const insightMap = graphRAGResults.insights || {};
+    const targetCategories = categories?.length
+      ? categories.filter(cat => Array.isArray(insightMap[cat]) && insightMap[cat].length)
+      : Object.keys(insightMap).filter(cat => Array.isArray(insightMap[cat]) && insightMap[cat].length);
+
+    targetCategories.forEach(category => {
+      const items = insightMap[category].slice(0, maxPerCategory);
+      if (items.length === 0) return;
+      lines.push(`${category.replace(/_/g, ' ')}:`);
+      items.forEach(item => {
+        const description = item.summary || item.title || item.detail || 'Insight';
+        const confidence = this._formatConfidence(item.confidence);
+        const suffix = confidence ? ` (confidence ${confidence})` : '';
+        lines.push(`- ${description}${suffix}`);
+      });
+    });
+
+    if (graphRAGResults.graphData?.graphStats) {
+      const stats = graphRAGResults.graphData.graphStats;
+      const statParts = [];
+      if (typeof stats.total_nodes === 'number') statParts.push(`nodes=${stats.total_nodes}`);
+      if (typeof stats.total_relationships === 'number') statParts.push(`relationships=${stats.total_relationships}`);
+      if (statParts.length) {
+        lines.push(`Graph Stats: ${statParts.join(', ')}`);
+      }
+    }
+
+    return lines.length ? lines.join('\n') : 'GraphRAG insights available but no matching categories.';
+  }
+
+  _graphRAGFallbackRecommendations(graphRAGResults = {}) {
+    const buckets = {
+      immediate: [],
+      shortTerm: [],
+      longTerm: [],
+      keyPriorities: []
+    };
+
+    if (!graphRAGResults?.insights) {
+      return buckets;
+    }
+
+    const { opportunities = [], risk_indicators = [], relationship_health = [] } = graphRAGResults.insights;
+
+    const addAction = (bucketName, action) => {
+      if (!action) return;
+      const bucket = buckets[bucketName];
+      if (!bucket.find(item => item.action === action.action && item.owner === action.owner)) {
+        bucket.push(action);
+      }
+    };
+
+    opportunities.slice(0, 5).forEach((insight, index) => {
+      const priority = (insight.priority || '').toLowerCase();
+      const confidence = this._normalizeConfidence(insight.confidence, 0.6);
+      const bucket = priority === 'high'
+        ? 'immediate'
+        : (priority === 'low' ? 'longTerm' : (confidence >= 0.7 ? 'immediate' : 'shortTerm'));
+
+      addAction(bucket, {
+        action: insight.title || insight.summary || `Activate GraphRAG opportunity ${index + 1}`,
+        rationale: insight.summary || 'GraphRAG surfaced an expansion opportunity',
+        outcome: insight.detail || 'Capture quantified value from identified stakeholders',
+        resources: insight.recommendations || ['Account team'],
+        owner: 'Account Manager',
+        timeline: insight.timeline || (bucket === 'immediate' ? 'Next 30 days' : 'Next 90 days'),
+        metrics: ['Opportunity advancement'],
+        source: 'graphrag'
+      });
+    });
+
+    risk_indicators.slice(0, 5).forEach((insight, index) => {
+      const confidence = this._normalizeConfidence(insight.confidence, 0.5);
+      const severity = (insight.severity || '').toLowerCase();
+      const bucket = severity === 'critical' || severity === 'high' || confidence >= 0.7 ? 'immediate' : 'shortTerm';
+      addAction(bucket, {
+        action: insight.title || insight.summary || `Mitigate GraphRAG risk ${index + 1}`,
+        rationale: insight.summary || 'Graph relationship analysis surfaced a risk signal',
+        outcome: 'Risk mitigated using targeted intervention',
+        resources: Array.isArray(insight.recommendations) ? insight.recommendations : ['Risk task force'],
+        owner: 'Customer Success Manager',
+        timeline: bucket === 'immediate' ? 'Next 14 days' : 'Next 60 days',
+        metrics: ['Risk indicator reduction'],
+        source: 'graphrag'
+      });
+      buckets.keyPriorities.push('Stabilize GraphRAG-identified risks');
+    });
+
+    relationship_health.slice(0, 3).forEach((insight, index) => {
+      const priority = this._normalizeConfidence(insight.confidence, 0.5) >= 0.7 ? 'immediate' : 'shortTerm';
+      addAction(priority, {
+        action: insight.title || insight.summary || `Reinforce relationship cluster ${index + 1}`,
+        rationale: insight.summary || 'GraphRAG highlights pivotal stakeholder relationships',
+        outcome: 'Stronger multi-threaded engagement',
+        resources: ['Executive sponsor', 'Relationship mapping'],
+        owner: 'Executive Sponsor',
+        timeline: priority === 'immediate' ? 'Next 30 days' : 'Next 90 days',
+        metrics: ['Stakeholder engagement score'],
+        source: 'graphrag'
+      });
+    });
+
+    if (graphRAGResults.summary) {
+      buckets.keyPriorities.push(graphRAGResults.summary);
+    }
+
+    buckets.keyPriorities = [...new Set(buckets.keyPriorities.filter(Boolean))];
+    return buckets;
+  }
+
+  _graphRAGInsightsToNarratives(graphRAGResults = {}) {
+    const narratives = [];
+    if (!graphRAGResults?.insights) {
+      return narratives;
+    }
+
+    Object.entries(graphRAGResults.insights).forEach(([category, items = []]) => {
+      items.slice(0, 4).forEach((insight, index) => {
+        const confidence = this._formatConfidence(insight.confidence);
+        narratives.push({
+          type: category,
+          title: insight.title || insight.summary || `${category} insight ${index + 1}`,
+          description: insight.detail || insight.summary || 'GraphRAG derived insight',
+          priority: confidence && parseInt(confidence, 10) >= 70 ? 'high' : 'medium',
+          actionable: true,
+          evidence: insight.evidence || [],
+          implications: insight.implications || [],
+          recommendations: Array.isArray(insight.recommendations) ? insight.recommendations : [],
+          source: 'graphrag'
+        });
+      });
+    });
+
+    return narratives;
+  }
+
+  _averageConfidence(items = []) {
+    const values = items
+      .map(item => this._normalizeConfidence(item.confidence, NaN))
+      .filter(value => Number.isFinite(value));
+    if (values.length === 0) {
+      return NaN;
+    }
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  _normalizeConfidence(value, fallback = 0.5) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.min(1, value));
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.min(1, parsed));
+    }
+    return fallback;
+  }
+
+  _formatConfidence(value) {
+    const normalized = this._normalizeConfidence(value, NaN);
+    if (Number.isFinite(normalized)) {
+      return `${Math.round(normalized * 100)}%`;
+    }
+    return null;
+  }
+
+  _impactFromSeverity(severity) {
+    if (!severity) return 'medium';
+    const value = `${severity}`.toLowerCase();
+    if (value.includes('critical') || value.includes('high')) return 'high';
+    if (value.includes('low')) return 'low';
+    return 'medium';
+  }
+
+  _severityFromConfidence(confidence) {
+    const value = this._normalizeConfidence(confidence, 0.5);
+    if (value >= 0.75) return 'high';
+    if (value <= 0.35) return 'low';
+    return 'medium';
   }
 
   getAvailableModels() {

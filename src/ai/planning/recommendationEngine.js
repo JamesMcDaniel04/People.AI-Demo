@@ -6,14 +6,15 @@ export class RecommendationEngine {
     this.aiService = new MixedAIService(config, klavisProvider);
   }
 
-  async generateRecommendations(accountData, analysis) {
+  async generateRecommendations(accountData, analysis, graphRAGResults = null) {
     console.log('🤖 AI-powered strategic recommendations...');
     
     const aiRecommendations = await this.aiService.generateStrategicRecommendations(
       accountData, 
       analysis.healthScore, 
       analysis.opportunities, 
-      analysis.risks
+      analysis.risks,
+      graphRAGResults
     );
 
     // Production-ready AI recommendations
@@ -21,13 +22,123 @@ export class RecommendationEngine {
       immediate: aiRecommendations.immediate,
       shortTerm: aiRecommendations.shortTerm,
       longTerm: aiRecommendations.longTerm,
-      resources: await this.identifyResourceRequirements(analysis),
+      resources: await this.identifyResourceRequirements(analysis, graphRAGResults),
       executiveSummary: aiRecommendations.executiveSummary,
-      keyPriorities: aiRecommendations.keyPriorities
+      keyPriorities: aiRecommendations.keyPriorities,
+      graphRAG: this.summarizeGraphRAGForRecommendations(graphRAGResults)
     };
 
+    const enriched = this.mergeGraphRAGActions(recommendations, graphRAGResults);
+
     console.log('✅ AI-powered recommendations generated');
-    return recommendations;
+    return enriched;
+  }
+
+  mergeGraphRAGActions(recommendations, graphRAGResults) {
+    if (!graphRAGResults?.insights) {
+      return recommendations;
+    }
+
+    const merged = {
+      ...recommendations,
+      immediate: [...(recommendations.immediate || [])],
+      shortTerm: [...(recommendations.shortTerm || [])],
+      longTerm: [...(recommendations.longTerm || [])],
+      keyPriorities: [...(recommendations.keyPriorities || [])],
+      graphRAG: recommendations.graphRAG || {}
+    };
+
+    const addAction = (bucket, action) => {
+      if (!action) return;
+      const list = merged[bucket];
+      if (!list.find(item => item.action === action.action && item.owner === action.owner)) {
+        list.push(action);
+      }
+    };
+
+    const opportunities = graphRAGResults.insights.opportunities || [];
+    opportunities.forEach((insight, index) => {
+      const priority = (insight.priority || '').toLowerCase();
+      const bucket = priority === 'high'
+        ? 'immediate'
+        : priority === 'low'
+          ? 'longTerm'
+          : 'shortTerm';
+      const amount = insight.estimated_value || insight.value;
+      addAction(bucket, {
+        action: `Activate graph opportunity: ${insight.title || insight.summary || `Insight ${index + 1}`}`,
+        rationale: insight.summary || 'GraphRAG detected expansion potential across connected stakeholders',
+        outcome: insight.detail || 'Validated and progressed graph-sourced opportunity',
+        resources: insight.recommendations || ['Opportunity task force'],
+        owner: 'Account Manager',
+        timeline: insight.timeline || (bucket === 'immediate' ? 'Next 30 days' : 'Next 90 days'),
+        metrics: [amount ? `Capture $${Math.round(amount).toLocaleString()} value` : 'Opportunity advancement'],
+        source: 'graphrag'
+      });
+    });
+
+    const risks = graphRAGResults.insights.risk_indicators || [];
+    risks.forEach((insight, index) => {
+      const severity = (insight.severity || '').toLowerCase();
+      const bucket = severity === 'critical' || severity === 'high' ? 'immediate' : 'shortTerm';
+      addAction(bucket, {
+        action: `Neutralize graph risk: ${insight.title || insight.summary || `Risk ${index + 1}`}`,
+        rationale: insight.summary || 'GraphRAG exposed relationship or process risk',
+        outcome: 'Risk mitigated through targeted intervention',
+        resources: Array.isArray(insight.recommendations) ? insight.recommendations : ['Risk mitigation squad'],
+        owner: 'Customer Success Manager',
+        timeline: bucket === 'immediate' ? 'Next 21 days' : 'Within 60 days',
+        metrics: ['Risk indicator reduction'],
+        source: 'graphrag'
+      });
+      merged.keyPriorities.push('Resolve GraphRAG-identified risks');
+    });
+
+    const relationshipHealth = graphRAGResults.insights.relationship_health || [];
+    relationshipHealth.forEach((insight, index) => {
+      addAction('shortTerm', {
+        action: `Leverage relationship cluster: ${insight.title || `Cluster ${index + 1}`}`,
+        rationale: insight.summary || 'GraphRAG highlights influential relationship patterns',
+        outcome: 'Improved multi-threaded engagement',
+        resources: ['Executive sponsor', 'Relationship mapping'],
+        owner: 'Executive Sponsor',
+        timeline: 'Next 60 days',
+        metrics: ['Stakeholder sentiment improvement'],
+        source: 'graphrag'
+      });
+    });
+
+    merged.keyPriorities = [...new Set(merged.keyPriorities)];
+    merged.graphRAG = {
+      ...(merged.graphRAG || {}),
+      actionCount: {
+        opportunities: opportunities.length,
+        risks: risks.length,
+        relationshipHealth: relationshipHealth.length
+      }
+    };
+
+    return merged;
+  }
+
+  summarizeGraphRAGForRecommendations(graphRAGResults) {
+    if (!graphRAGResults) {
+      return null;
+    }
+
+    const insightCounts = Object.fromEntries(
+      Object.entries(graphRAGResults.insights || {}).map(([category, items]) => [
+        category,
+        Array.isArray(items) ? items.length : 0
+      ])
+    );
+
+    return {
+      summary: graphRAGResults.summary || null,
+      insightCounts,
+      metadata: graphRAGResults.metadata || {},
+      graphStats: graphRAGResults.graphData?.graphStats || {}
+    };
   }
 
   async generateImmediateActions(accountData, analysis) {
@@ -238,7 +349,7 @@ export class RecommendationEngine {
     return actions;
   }
 
-  async identifyResourceRequirements(analysis) {
+  async identifyResourceRequirements(analysis, graphRAGResults = null) {
     const resources = {
       personnel: [],
       tools: [],
@@ -250,24 +361,24 @@ export class RecommendationEngine {
     const totalOpportunityValue = this.calculateTotalOpportunityValue(analysis.opportunities);
     
     if (totalOpportunityValue > 500000) {
-      resources.personnel.push('Dedicated account manager');
-      resources.personnel.push('Solutions engineer');
+      this._pushUnique(resources.personnel, 'Dedicated account manager');
+      this._pushUnique(resources.personnel, 'Solutions engineer');
     }
 
     if (totalOpportunityValue > 1000000) {
-      resources.personnel.push('Customer success manager');
-      resources.personnel.push('Executive sponsor');
+      this._pushUnique(resources.personnel, 'Customer success manager');
+      this._pushUnique(resources.personnel, 'Executive sponsor');
     }
 
     // Tools and systems
-    resources.tools.push('CRM system updates');
-    resources.tools.push('Account planning platform');
+    this._pushUnique(resources.tools, 'CRM system updates');
+    this._pushUnique(resources.tools, 'Account planning platform');
     
     const stakeholderCount = Object.values(analysis.stakeholderMap || {})
       .reduce((total, stakeholders) => total + stakeholders.length, 0);
     
     if (stakeholderCount > 10) {
-      resources.tools.push('Relationship mapping tool');
+      this._pushUnique(resources.tools, 'Relationship mapping tool');
     }
 
     // Budget considerations
@@ -276,20 +387,35 @@ export class RecommendationEngine {
     ).length || 0;
 
     if (highValueOpportunities > 0) {
-      resources.budget.push('Proof of concept funding');
-      resources.budget.push('Executive event budget');
+      this._pushUnique(resources.budget, 'Proof of concept funding');
+      this._pushUnique(resources.budget, 'Executive event budget');
     }
 
     // Timeline resources
-    resources.timeline.push('Quarterly business reviews');
-    resources.timeline.push('Monthly stakeholder touchpoints');
+    this._pushUnique(resources.timeline, 'Quarterly business reviews');
+    this._pushUnique(resources.timeline, 'Monthly stakeholder touchpoints');
     
     const highRisks = analysis.risks?.filter(risk => 
       risk.level === 'high'
     ).length || 0;
     
     if (highRisks > 0) {
-      resources.timeline.push('Weekly risk monitoring');
+      this._pushUnique(resources.timeline, 'Weekly risk monitoring');
+    }
+
+    if (graphRAGResults?.insights?.opportunities?.length) {
+      this._pushUnique(resources.personnel, 'Graph insights analyst');
+      this._pushUnique(resources.tools, 'GraphRAG insights workspace');
+      this._pushUnique(resources.timeline, 'Bi-weekly graph insight review');
+    }
+
+    if (graphRAGResults?.insights?.risk_indicators?.length) {
+      this._pushUnique(resources.personnel, 'Risk mitigation squad');
+      this._pushUnique(resources.timeline, 'Graph risk watchlist updates');
+    }
+
+    if (graphRAGResults?.graphData?.graphStats?.total_nodes > 0) {
+      this._pushUnique(resources.tools, 'Knowledge graph visualization suite');
     }
 
     return resources;
@@ -297,5 +423,12 @@ export class RecommendationEngine {
 
   calculateTotalOpportunityValue(opportunities) {
     return opportunities?.reduce((total, opp) => total + (opp.value || 0), 0) || 0;
+  }
+
+  _pushUnique(collection, value) {
+    if (!value) return;
+    if (!collection.includes(value)) {
+      collection.push(value);
+    }
   }
 }
