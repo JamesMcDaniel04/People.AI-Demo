@@ -96,6 +96,11 @@ data/
 backups/
 exports/
 
+# Allow source-controlled template definitions
+!src/data/
+!src/data/templates/
+!src/data/templates/**
+
 # Build outputs
 build/
 dist/

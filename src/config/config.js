@@ -177,6 +177,70 @@ export const config = {
     }
   },
 
+  demo: {
+    defaultProfile: process.env.DEMO_DEFAULT_PROFILE || 'enterprise-saas-expansion',
+    anonymizeByDefault: process.env.DEMO_AUTO_ANONYMIZE !== 'false',
+    maskNames: process.env.DEMO_MASK_NAMES === 'true',
+    templateOverrides: parseJSONEnv(process.env.DEMO_TEMPLATE_OVERRIDES, {}),
+    profiles: {
+      include: parseStringSetEnv(process.env.DEMO_PROFILE_INCLUDE),
+      exclude: parseStringSetEnv(process.env.DEMO_PROFILE_EXCLUDE)
+    },
+    dataset: {
+      outputDir: process.env.DEMO_DATA_OUTPUT_DIR || path.resolve(process.cwd(), 'data/generated'),
+      auditDir: process.env.DEMO_AUDIT_DIR || path.resolve(process.cwd(), 'logs/demo-audit'),
+      retentionDays: parseInt(process.env.DEMO_DATA_RETENTION_DAYS) || 90
+    },
+    scheduling: {
+      queue: process.env.DEMO_QUEUE_NAME || 'demo-data-pipeline',
+      cron: process.env.DEMO_REFRESH_CRON || '0 * * * *',
+      bulkBatchSize: parseInt(process.env.DEMO_BULK_BATCH_SIZE) || 5
+    },
+    quality: {
+      targetScore: parseInt(process.env.DEMO_QUALITY_TARGET || '85'),
+      baselineWeight: parseFloat(process.env.DEMO_QUALITY_BASELINE_WEIGHT || '0.4'),
+      freshnessWindowDays: parseInt(process.env.DEMO_FRESHNESS_WINDOW_DAYS || '14')
+    },
+    lifecycle: {
+      defaultCadenceDays: parseInt(process.env.DEMO_LIFECYCLE_DEFAULT_DAYS || '14')
+    }
+  },
+
+  security: {
+    okta: {
+      enabled: process.env.OKTA_ENABLED === 'true',
+      domain: process.env.OKTA_DOMAIN,
+      authServerId: process.env.OKTA_AUTH_SERVER_ID || 'default',
+      clientId: process.env.OKTA_CLIENT_ID,
+      clientSecret: process.env.OKTA_CLIENT_SECRET,
+      redirectUri: process.env.OKTA_REDIRECT_URI || 'http://localhost:3001/auth/okta/callback',
+      scopes: parseStringSetEnv(process.env.OKTA_SCOPES).length > 0 ? parseStringSetEnv(process.env.OKTA_SCOPES) : ['openid', 'profile', 'email'],
+      audience: process.env.OKTA_AUDIENCE || 'api://default'
+    }
+  },
+
+  integrations: {
+    pipedream: {
+      enabled: process.env.PIPEDREAM_ENABLED === 'true',
+      clientId: process.env.PIPEDREAM_CLIENT_ID,
+      clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
+      authUrl: process.env.PIPEDREAM_AUTH_URL || 'https://oauth.pipedream.com/authorize',
+      tokenUrl: process.env.PIPEDREAM_TOKEN_URL || 'https://oauth.pipedream.com/token',
+      baseUrl: process.env.PIPEDREAM_BASE_URL || 'https://api.pipedream.com',
+      defaultSource: process.env.PIPEDREAM_DEFAULT_SOURCE,
+      eventWebhookUrl: process.env.PIPEDREAM_EVENT_WEBHOOK_URL,
+      redirectUri: process.env.PIPEDREAM_REDIRECT_URI || 'http://localhost:3001/integration/oauth/pipedream/callback',
+      scopes: parseStringSetEnv(process.env.PIPEDREAM_SCOPES || 'openid,profile,email')
+    },
+    peopleAI: {
+      enabled: process.env.PEOPLE_AI_ENABLED === 'true',
+      baseUrl: process.env.PEOPLE_AI_BASE_URL || 'https://api.people.ai',
+      apiKey: process.env.PEOPLE_AI_API_KEY,
+      connectorId: process.env.PEOPLE_AI_CONNECTOR_ID,
+      pipedreamDestination: process.env.PEOPLE_AI_PIPEDREAM_DESTINATION
+    }
+  },
+
   // AI configuration with Claude and OpenAI models
   ai: {
     provider: process.env.AI_PROVIDER || 'mixed',

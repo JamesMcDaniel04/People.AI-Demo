@@ -1,0 +1,355 @@
+{
+  "emails": [
+    {
+      "thread_id": "T001",
+      "topic": "Initial Outreach - Retail Expansion",
+      "messages": [
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-12 09:15",
+          "subject": "Scaling Acme Retail’s global checkout experience",
+          "body": "Hi Sarah,\n\nI work with retailers scaling their e-commerce platforms globally. I noticed Acme Retail has recently expanded into Europe — congrats!\n\nI’d love to show you how Stripe can simplify cross-border payments, optimize conversion rates, and keep you compliant with PSD2/SCA.\n\nWould you be open to a quick 20-minute intro call this week?\n\nBest, \nAlex Chen\nAccount Executive | Stripe"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-01-12 11:47",
+          "subject": "Re: Scaling Acme Retail’s global checkout experience",
+          "body": "Hi Alex,\n\nYes, we’re evaluating providers for EU payments. Can you send over some material before we schedule a call?\n\nThanks, \nSarah"
+        },
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-12 19:47",
+          "subject": "Re: Scaling Acme Retail’s global checkout experience",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T002",
+      "topic": "Discovery Call - Agenda & Materials",
+      "messages": [
+        {
+          "from": "john.miller@stripe.com",
+          "to": "lisa.park@northstar-logistics.com",
+          "timestamp": "2025-01-15 08:40",
+          "subject": "Agenda for today’s discovery call",
+          "body": "Hi Lisa,\n\nSharing a proposed agenda for today: current architecture overview, pain points, desired outcomes, and a demo of Stripe’s unified payments API and reconciliation.\n\nAttaching a brief architecture doc and case studies.\n\nRegards,\nJohn Miller\nSolutions Engineer | Stripe"
+        },
+        {
+          "from": "lisa.park@northstar-logistics.com",
+          "to": "john.miller@stripe.com",
+          "timestamp": "2025-01-15 09:05",
+          "subject": "Re: Agenda for today’s discovery call",
+          "body": "Thanks John—looks good. Please emphasize multi-region failover and webhook reliability.\n\n— Lisa"
+        },
+        {
+          "from": "john.miller@stripe.com",
+          "to": "lisa.park@northstar-logistics.com",
+          "timestamp": "2025-01-15 17:05",
+          "subject": "Re: Agenda for today’s discovery call",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T003",
+      "topic": "Demo Follow-up - Next Steps",
+      "messages": [
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-19 14:20",
+          "subject": "Follow-up: Stripe demo recap and sandbox",
+          "body": "Hi Sarah,\n\nGreat to meet the team. Here’s your sandbox, API keys, and a guide to test 3DS/SCA flows.\n\nNext steps: implementation planning and security questionnaire. I can loop in our CSM, Maria.\n\nBest,\nAlex"
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-19 14:45",
+          "subject": "Onboarding resources + QBR template",
+          "body": "Hi Sarah,\n\nI’ll be your CSM. Sharing onboarding checklist and a QBR template to track objectives and KPIs.\n\nWarmly,\nMaria"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-01-19 22:45",
+          "subject": "Onboarding resources + QBR template",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T004",
+      "topic": "Pricing Discussion - Volume Tiers",
+      "messages": [
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-01-22 10:05",
+          "subject": "Pricing tiers for EU and NA volumes",
+          "body": "Hi Alex,\n\nCan you provide indicative rates for EU and North America at 1M / 5M / 10M transactions per month? We care about blended effective rate and cross-border fees.\n\nThanks,\nSarah"
+        },
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-22 12:31",
+          "subject": "Re: Pricing tiers for EU and NA volumes",
+          "body": "Hi Sarah,\n\nSharing a pricing matrix with tiered volume discounts, country mix assumptions, and estimated blended rates. We can structure a ramp with true-up at quarter end.\n\nBest,\nAlex"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-01-22 20:31",
+          "subject": "Re: Pricing tiers for EU and NA volumes",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T005",
+      "topic": "Security & Compliance - Questionnaire",
+      "messages": [
+        {
+          "from": "emma.brown@globalmedia.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-01-23 16:10",
+          "subject": "Security questionnaire & DPA",
+          "body": "Hi Maria,\n\nPlease complete our security questionnaire and share Stripe’s DPA and sub-processor list. This is required before procurement can proceed.\n\nRegards,\nEmma"
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "emma.brown@globalmedia.com",
+          "timestamp": "2025-01-23 17:00",
+          "subject": "Re: Security questionnaire & DPA",
+          "body": "Hi Emma,\n\nAttached are our latest SOC2 Type II, PCI, and DPA documents. I’ve routed the questionnaire to our security team—ETA 3 business days.\n\nBest,\nMaria"
+        },
+        {
+          "from": "emma.brown@globalmedia.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-01-24 01:00",
+          "subject": "Re: Security questionnaire & DPA",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T006",
+      "topic": "Technical Deep Dive - Webhooks & Idempotency",
+      "messages": [
+        {
+          "from": "john.miller@stripe.com",
+          "to": "nina.rivers@healthtrack.io",
+          "timestamp": "2025-01-26 09:50",
+          "subject": "Webhook reliability and idempotency keys",
+          "body": "Hi Nina,\n\nFollowing up on your questions: Stripe retries on 3xx/4xx/5xx per exponential backoff; idempotency keys ensure safe retries for POST requests.\n\nHere are best practices and example code.\n\n— John"
+        },
+        {
+          "from": "nina.rivers@healthtrack.io",
+          "to": "john.miller@stripe.com",
+          "timestamp": "2025-01-26 10:20",
+          "subject": "Re: Webhook reliability and idempotency keys",
+          "body": "Thanks John. We’ll test multi-tenant flows and sign webhook secrets per env. Could we also review Radar rules for healthcare patterns?\n\n— Nina"
+        },
+        {
+          "from": "john.miller@stripe.com",
+          "to": "nina.rivers@healthtrack.io",
+          "timestamp": "2025-01-26 18:20",
+          "subject": "Re: Webhook reliability and idempotency keys",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T007",
+      "topic": "Implementation Plan - Timeline & Resources",
+      "messages": [
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "lisa.park@northstar-logistics.com",
+          "timestamp": "2025-01-28 13:15",
+          "subject": "Draft implementation plan and RACI",
+          "body": "Hi Lisa,\n\nAttached is a draft plan with milestones (sandbox → pilot → phased rollout), RACI, and success metrics. We suggest a 6-week pilot in NA, then EMEA.\n\nRegards,\nMaria"
+        },
+        {
+          "from": "lisa.park@northstar-logistics.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-01-28 14:05",
+          "subject": "Re: Draft implementation plan and RACI",
+          "body": "Thanks Maria. We can allocate 2 engineers. Please include SLAs and rollback plan for the pilot.\n\n— Lisa"
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "lisa.park@northstar-logistics.com",
+          "timestamp": "2025-01-28 22:05",
+          "subject": "Re: Draft implementation plan and RACI",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T008",
+      "topic": "Executive Briefing - Objectives & KPIs",
+      "messages": [
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-30 09:00",
+          "subject": "Proposed KPIs for QBR",
+          "body": "Hi Sarah,\n\nAhead of the QBR: proposed KPIs—auth success rate, checkout conversion, chargeback rate, and blended fees.\n\nWe’ll share a dashboard link before the meeting.\n\nBest,\nAlex"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-01-30 17:00",
+          "subject": "Proposed KPIs for QBR",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        },
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-01-31 01:00",
+          "subject": "Proposed KPIs for QBR",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T009",
+      "topic": "Pricing Negotiation - Final Terms",
+      "messages": [
+        {
+          "from": "emma.brown@globalmedia.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-02-02 11:30",
+          "subject": "Negotiation points and MSA redlines",
+          "body": "Alex,\n\nProcurement requests: lower cross-border markup by 10 bps, add termination for convenience, and include a migration assistance clause.\n\nRegards,\nEmma"
+        },
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "emma.brown@globalmedia.com",
+          "timestamp": "2025-02-02 14:00",
+          "subject": "Re: Negotiation points and MSA redlines",
+          "body": "Hi Emma,\n\nWe can meet you halfway on cross-border and include migration assistance. Legal updated the MSA—please review the attached redlines.\n\nThanks,\nAlex"
+        },
+        {
+          "from": "emma.brown@globalmedia.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-02-02 22:00",
+          "subject": "Re: Negotiation points and MSA redlines",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T010",
+      "topic": "Implementation - Go-Live Checklist",
+      "messages": [
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "daniel.perez@acme-retail.com",
+          "timestamp": "2025-02-10 10:10",
+          "subject": "Go-live checklist + reconciliation tests",
+          "body": "Hi Daniel,\n\nHere’s the go-live checklist: API keys rotation, webhook secret rotation, bank accounts verification, and reconciliation tests.\n\nPing us when you’re ready for the final smoke test.\n\nBest,\nMaria"
+        },
+        {
+          "from": "daniel.perez@acme-retail.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-02-10 12:05",
+          "subject": "Re: Go-live checklist + reconciliation tests",
+          "body": "Thanks Maria. Finance will validate payout schedules and ledger mappings this week.\n\n— Daniel"
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "daniel.perez@acme-retail.com",
+          "timestamp": "2025-02-10 20:05",
+          "subject": "Re: Go-live checklist + reconciliation tests",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T011",
+      "topic": "Support - Chargeback Patterns & Radar",
+      "messages": [
+        {
+          "from": "daniel.perez@acme-retail.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-02-14 15:30",
+          "subject": "Increase in chargebacks in EMEA",
+          "body": "Hi Maria,\n\nWe’re seeing a spike in chargebacks in EMEA. Can we review Radar rules and dispute evidence templates?\n\nThanks,\nDaniel"
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "daniel.perez@acme-retail.com",
+          "timestamp": "2025-02-14 16:05",
+          "subject": "Re: Increase in chargebacks in EMEA",
+          "body": "Hi Daniel,\n\nLooping in our risk team. Sharing a set of recommended Radar thresholds and curated evidence templates to improve win rate.\n\n— Maria"
+        },
+        {
+          "from": "daniel.perez@acme-retail.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-02-15 00:05",
+          "subject": "Re: Increase in chargebacks in EMEA",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T012",
+      "topic": "QBR - Agenda & Materials",
+      "messages": [
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-02-20 09:00",
+          "subject": "QBR agenda + dashboard access",
+          "body": "Hi Sarah,\n\nProposed QBR agenda: outcomes vs objectives, roadmap alignment, expansion opportunities, and risk mitigation.\n\nDashboard access included—please review KPIs ahead of time.\n\nBest,\nMaria"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "maria.garcia@stripe.com",
+          "timestamp": "2025-02-20 17:00",
+          "subject": "QBR agenda + dashboard access",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        },
+        {
+          "from": "maria.garcia@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-02-21 01:00",
+          "subject": "QBR agenda + dashboard access",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    },
+    {
+      "thread_id": "T013",
+      "topic": "Post-Go-Live - Performance Review",
+      "messages": [
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-02-28 11:00",
+          "subject": "Month 1 results & next best actions",
+          "body": "Hi Sarah,\n\nSharing Month 1 KPIs: auth rate up 2.1 pts, conversion +0.8 pts, disputes stable.\n\nWe recommend piloting Checkout + Payment Element for cross-border locales and enabling Adaptive Acceptance.\n\nRegards,\nAlex"
+        },
+        {
+          "from": "sarah.wilson@acme-retail.com",
+          "to": "alex.chen@stripe.com",
+          "timestamp": "2025-02-28 19:00",
+          "subject": "Month 1 results & next best actions",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        },
+        {
+          "from": "alex.chen@stripe.com",
+          "to": "sarah.wilson@acme-retail.com",
+          "timestamp": "2025-03-01 03:00",
+          "subject": "Month 1 results & next best actions",
+          "body": "Quick follow-up: attaching requested details and next steps."
+        }
+      ]
+    }
+  ]
+}

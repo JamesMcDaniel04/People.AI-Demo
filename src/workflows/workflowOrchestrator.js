@@ -12,6 +12,10 @@ import { PostgresService } from '../services/postgresService.js';
 import { SupabaseService } from '../services/supabaseService.js';
 import { v4 as uuidv4 } from 'uuid';
 import { ReminderService } from '../services/reminderService.js';
+import { TemplateManager } from '../data/templates/templateManager.js';
+import { DemoDataService } from '../services/demoDataService.js';
+import { OktaAuthService } from '../services/oktaAuthService.js';
+import { IntegrationService, INTEGRATION_PROVIDERS } from '../services/integrationService.js';
 
 export class WorkflowOrchestrator {
   constructor(config) {
@@ -19,7 +23,7 @@ export class WorkflowOrchestrator {
     this.logger = new Logger(config);
     this.workflows = new Map();
     this.activeJobs = new Map();
-    
+
     // Initialize job queue service
     this.jobQueueService = new JobQueueService(config, this);
     
@@ -44,6 +48,12 @@ export class WorkflowOrchestrator {
 
     // Reminder coordination
     this.reminderService = new ReminderService(config, this);
+    this.templateManager = new TemplateManager({
+      defaultProfileId: config.demo?.defaultProfile
+    });
+    this.demoDataService = null;
+    this.oktaService = new OktaAuthService(config);
+    this.integrationService = new IntegrationService(config);
   }
 
   async initialize() {
@@ -53,6 +63,14 @@ export class WorkflowOrchestrator {
       // Initialize data integration
       this.dataManager = new DataIntegrationManager(this.config);
       await this.dataManager.initialize();
+      const sampleProvider = this.dataManager.getProvider?.('sample');
+      if (sampleProvider) {
+        this.demoDataService = new DemoDataService(this.config, {
+          sampleProvider,
+          templateManager: this.templateManager,
+          jobQueueService: this.jobQueueService
+        });
+      }
       
       // Initialize account planner
       this.accountPlanner = new AccountPlannerApp(this.dataManager, this.config);
@@ -97,6 +115,19 @@ export class WorkflowOrchestrator {
         this.logger.warn('⚠️ Job queue service failed to initialize, falling back to in-memory scheduling');
       }
 
+      if (jobQueueInitialized) {
+        try {
+          await this.demoDataService?.initialize();
+        } catch (demoError) {
+          this.logger.warn('⚠️ Demo data service initialization skipped', { error: demoError.message });
+        }
+        try {
+          await this.integrationService?.getStatus();
+        } catch (integrationError) {
+          this.logger.warn('⚠️ Integration service status check failed', { error: integrationError.message });
+        }
+      }
+
       // Initialize n8n service if enabled
       if (this.n8nEnabled) {
         try {
@@ -117,9 +148,14 @@ export class WorkflowOrchestrator {
           this.n8nEnabled = false;
         }
       }
-      
+
       this.logger.info('✅ Workflow Orchestrator initialized successfully', {
-        n8nEnabled: this.n8nEnabled
+        n8nEnabled: this.n8nEnabled,
+        templateProfiles: this.templateManager.listProfiles().length,
+        demoDataScheduling: !!this.demoDataService,
+        oktaEnabled: this.oktaService.isEnabled(),
+        pipedreamIntegration: this.integrationService.isEnabled(INTEGRATION_PROVIDERS.PIPEDREAM),
+        peopleAiIntegration: this.integrationService.isEnabled(INTEGRATION_PROVIDERS.PEOPLE_AI)
       });
 
       if (this.reminderService?.isEnabled()) {
@@ -138,6 +174,22 @@ export class WorkflowOrchestrator {
       });
       throw error;
     }
+  }
+
+  getTemplateManager() {
+    return this.templateManager;
+  }
+
+  getDemoDataService() {
+    return this.demoDataService;
+  }
+
+  getOktaService() {
+    return this.oktaService;
+  }
+
+  getIntegrationService() {
+    return this.integrationService;
   }
 
   // Create a new workflow

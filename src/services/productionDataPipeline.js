@@ -4,6 +4,7 @@ import { ConflictResolutionService } from './conflictResolutionService.js';
 import { Logger } from '../utils/logger.js';
 import { statusService as defaultStatusService } from './statusService.js';
 import { PostgresService } from './postgresService.js';
+import { DemoDataQualityService } from './demoDataQualityService.js';
 
 const DOMAIN_KEYS = [
   'accountInfo',
@@ -27,6 +28,7 @@ export class ProductionDataPipeline extends EventEmitter {
     this.postgresService = options.postgresService || null;
     this.validationService = new DataValidationService(config);
     this.conflictResolver = new ConflictResolutionService(config);
+    this.demoQualityService = new DemoDataQualityService(config);
     this.realtimeConfig = {
       enabled: options.realtime?.enabled ?? (config?.data?.pipeline?.realtime?.enabled !== false),
       intervalMs: Number(options.realtime?.intervalMs || config?.data?.pipeline?.realtime?.intervalMs || 60_000),
@@ -148,6 +150,10 @@ export class ProductionDataPipeline extends EventEmitter {
     }
 
     const mergedData = this.buildMergedDataset(accountName, resolvedByDomain, validationResults, providerResults);
+    const qualityInput = this.buildQualitySnapshot(mergedData);
+    const qualityScore = this.demoQualityService.evaluate(qualityInput);
+    mergedData.metadata = mergedData.metadata || {};
+    mergedData.metadata.quality = qualityScore;
     const lineageRecords = this.collectLineageRecords(accountName, resolvedByDomain);
 
     await this.persistAudit(accountName, providerResults, validationResults, conflictsByDomain, options);
@@ -166,7 +172,8 @@ export class ProductionDataPipeline extends EventEmitter {
       validation: this.validationService.summarizeResults(validationResults),
       conflicts: Object.fromEntries(
         Object.entries(conflictsByDomain).map(([domain, conflicts]) => [domain, conflicts.length])
-      )
+      ),
+      quality: qualityScore.overall
     };
 
     this.statusService?.record('pipeline_ingestion', {
@@ -399,6 +406,33 @@ export class ProductionDataPipeline extends EventEmitter {
     }
 
     return dataset;
+  }
+
+  buildQualitySnapshot(mergedData) {
+    const extract = (domain) => {
+      const entries = Array.isArray(mergedData?.[domain]) ? mergedData[domain] : [];
+      return entries.flatMap((entry) => entry?.data || []);
+    };
+
+    const validationSummary = mergedData?.metadata?.pipeline?.validation || {};
+    const domainScores = Object.values(validationSummary)
+      .map((item) => (typeof item?.qualityScore === 'number' ? item.qualityScore : 1));
+    const baseline = domainScores.length > 0
+      ? domainScores.reduce((sum, value) => sum + value, 0) / domainScores.length
+      : 0.85;
+
+    return {
+      accountInfo: mergedData?.basic?.data || {},
+      emails: extract('emails'),
+      calls: extract('calls'),
+      documents: extract('documents'),
+      calendar: extract('calendar'),
+      crm: extract('crm'),
+      stakeholders: extract('stakeholders'),
+      datasetConfig: mergedData?.metadata?.datasetConfig || {},
+      metadata: { trustBaseline: baseline },
+      profile: mergedData?.basic?.data?.datasetProfile || mergedData?.basic?.data?.profile
+    };
   }
 
   collectLineageRecords(accountName, resolvedByDomain) {

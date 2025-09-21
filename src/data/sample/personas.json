@@ -1,0 +1,115 @@
+{
+  "stripe_team": [
+    {
+      "name": "Alex Chen",
+      "role": "Account Executive, Stripe",
+      "objectives": [
+        "Drive new enterprise logos",
+        "Close multi-million dollar contracts"
+      ],
+      "pain_points": [
+        "Procurement delays",
+        "Pricing objections"
+      ],
+      "style": "Concise, persuasive, ROI-focused"
+    },
+    {
+      "name": "John Miller",
+      "role": "Solutions Engineer, Stripe",
+      "objectives": [
+        "Ensure smooth technical integrations",
+        "Build credibility with engineers"
+      ],
+      "pain_points": [
+        "Lengthy security/compliance reviews",
+        "Misaligned technical resources"
+      ],
+      "style": "Technical but approachable, detail-oriented"
+    },
+    {
+      "name": "Maria Garcia",
+      "role": "Customer Success Manager, Stripe",
+      "objectives": [
+        "Drive adoption post-sale",
+        "Secure renewals and expansions"
+      ],
+      "pain_points": [
+        "Low executive engagement",
+        "Slow customer onboarding"
+      ],
+      "style": "Supportive, relationship-oriented, proactive"
+    }
+  ],
+  "customer_stakeholders": [
+    {
+      "name": "Sarah Wilson",
+      "role": "CFO, Acme Retail",
+      "persona_type": "Economic Buyer",
+      "objectives": [
+        "Lower transaction costs",
+        "Improve global cash flow visibility"
+      ],
+      "pain_points": [
+        "High cross-border fees",
+        "Inconsistent reconciliation"
+      ],
+      "style": "Direct, financial, data-driven"
+    },
+    {
+      "name": "Lisa Park",
+      "role": "CTO, NorthStar Logistics",
+      "persona_type": "Technical Champion",
+      "objectives": [
+        "Unify global payments",
+        "Reduce engineering overhead"
+      ],
+      "pain_points": [
+        "Fragmented providers",
+        "Complex integrations"
+      ],
+      "style": "Pragmatic, technical, fact-focused"
+    },
+    {
+      "name": "Emma Brown",
+      "role": "VP Procurement, GlobalMedia",
+      "persona_type": "Economic Buyer / Procurement Gatekeeper",
+      "objectives": [
+        "Negotiate favorable vendor pricing",
+        "Mitigate vendor lock-in risk"
+      ],
+      "pain_points": [
+        "High rates vs competitors",
+        "Contract rigidity"
+      ],
+      "style": "Formal, cost-sensitive, detail-heavy"
+    },
+    {
+      "name": "Nina Rivers",
+      "role": "CTO, HealthTrack.io",
+      "persona_type": "Technical Champion",
+      "objectives": [
+        "Ensure HIPAA & PCI compliance",
+        "Enable multi-tenant billing"
+      ],
+      "pain_points": [
+        "Complex security requirements",
+        "Slow dev cycles"
+      ],
+      "style": "Analytical, compliance-minded, precise"
+    },
+    {
+      "name": "Daniel Perez",
+      "role": "Finance Operations Manager, Acme Retail",
+      "persona_type": "End User",
+      "objectives": [
+        "Simplify reconciliation",
+        "Reduce manual reporting work"
+      ],
+      "pain_points": [
+        "Cumbersome month-end close",
+        "Disjointed reports"
+      ],
+      "style": "Hands-on, detail-oriented, pragmatic"
+    }
+  ]
+}

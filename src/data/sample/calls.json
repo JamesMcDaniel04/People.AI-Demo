@@ -1,0 +1,82 @@
+{
+  "calls": [
+    {
+      "call_id": "C001",
+      "type": "Discovery Call",
+      "date": "2025-01-15 10:00",
+      "participants": [
+        "Alex Chen - AE (Stripe)",
+        "Lisa Park - CTO (NorthStar Logistics)",
+        "John Miller - SE (Stripe)"
+      ],
+      "duration": "45 minutes",
+      "transcript": [
+        { "speaker": "Alex (AE)", "text": "Thanks for making time today, Lisa. I’d love to understand your payment challenges as you scale." },
+        { "speaker": "Lisa (CTO)", "text": "Our biggest issue is fragmented providers across regions. We use one vendor in APAC, another in the US, and reconciliation is a nightmare." },
+        { "speaker": "John (SE)", "text": "That’s common. With Stripe, you’d unify reporting and reconciliation globally. Our APIs are consistent across regions." }
+      ]
+    },
+    {
+      "call_id": "C002",
+      "type": "Technical Deep Dive",
+      "date": "2025-01-26 10:30",
+      "participants": [
+        "John Miller - SE (Stripe)",
+        "Nina Rivers - CTO (HealthTrack.io)"
+      ],
+      "duration": "60 minutes",
+      "transcript": [
+        { "speaker": "Nina (CTO)", "text": "We need deterministic idempotency and clear guidance on webhook retries." },
+        { "speaker": "John (SE)", "text": "We support idempotency per request key and exponential backoff on retries. Here’s how to monitor delivery metrics." },
+        { "speaker": "Nina (CTO)", "text": "We’ll implement HMAC verification and rotate secrets per environment." }
+      ]
+    },
+    {
+      "call_id": "C003",
+      "type": "Executive Briefing",
+      "date": "2025-01-30 13:00",
+      "participants": [
+        "Alex Chen - AE (Stripe)",
+        "Sarah Wilson - CFO (Acme Retail)",
+        "Maria Garcia - CSM (Stripe)"
+      ],
+      "duration": "30 minutes",
+      "transcript": [
+        { "speaker": "Sarah (CFO)", "text": "Our priorities: lower total processing costs and improve conversion in EU." },
+        { "speaker": "Alex (AE)", "text": "We can pilot in EU with optimized routing and 3DS experience management." },
+        { "speaker": "Maria (CSM)", "text": "We’ll track KPIs in the QBR dashboard and set targets for auth rate and checkout conversion." }
+      ]
+    },
+    {
+      "call_id": "C004",
+      "type": "Pricing Negotiation",
+      "date": "2025-02-02 15:00",
+      "participants": [
+        "Alex Chen - AE (Stripe)",
+        "Emma Brown - VP Procurement (GlobalMedia)"
+      ],
+      "duration": "40 minutes",
+      "transcript": [
+        { "speaker": "Emma (VP Procurement)", "text": "We need to improve cross-border pricing and add flexibility around terms." },
+        { "speaker": "Alex (AE)", "text": "We can offer improved cross-border rates with a ramp and include migration assistance." },
+        { "speaker": "Emma (VP Procurement)", "text": "Share the redlines and we’ll review with legal." }
+      ]
+    },
+    {
+      "call_id": "C005",
+      "type": "QBR",
+      "date": "2025-02-20 11:00",
+      "participants": [
+        "Maria Garcia - CSM (Stripe)",
+        "Sarah Wilson - CFO (Acme Retail)",
+        "Daniel Perez - Finance Ops (Acme Retail)"
+      ],
+      "duration": "50 minutes",
+      "transcript": [
+        { "speaker": "Maria (CSM)", "text": "Reviewing KPIs: auth rate up 2.1 pts, conversion +0.8 pts, disputes stable." },
+        { "speaker": "Sarah (CFO)", "text": "Let’s plan EU rollout and track effective blended rate monthly." },
+        { "speaker": "Daniel (Finance Ops)", "text": "We’ll validate reconciliation and payout schedules before expanding." }
+      ]
+    }
+  ]
+}

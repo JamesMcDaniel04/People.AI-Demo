@@ -80,6 +80,18 @@ export class JobQueueService {
         }
       });
 
+      await this.createQueue('demo-data-generation', {
+        defaultJobOptions: {
+          removeOnComplete: 25,
+          removeOnFail: 25,
+          attempts: 2,
+          backoff: {
+            type: 'exponential',
+            delay: 3000,
+          },
+        }
+      });
+
       this.logger.info('✅ Job Queue Service initialized successfully', {
         queues: Array.from(this.queues.keys()),
         workers: Array.from(this.workers.keys())
@@ -201,6 +213,10 @@ export class JobQueueService {
           result = await this.executeRecurringWorkflow(data);
           break;
 
+        case 'demo-data-refresh':
+          result = await this.executeDemoDataRefresh(data);
+          break;
+
         default:
           throw new Error(`Unknown job type: ${type}`);
       }
@@ -261,6 +277,13 @@ export class JobQueueService {
     }
 
     return result;
+  }
+
+  async executeDemoDataRefresh(data) {
+    if (!this.workflowOrchestrator?.demoDataService) {
+      throw new Error('Demo data service unavailable');
+    }
+    return await this.workflowOrchestrator.demoDataService.handleRefreshJob(data);
   }
 
   // Public API methods
@@ -367,6 +390,87 @@ export class JobQueueService {
       jobName,
       workflowId,
       cronExpression
+    });
+
+    return job;
+  }
+
+  async enqueueDemoDataRefresh(payload, options = {}) {
+    if (!this.enabled) {
+      throw new Error('Job queue not enabled');
+    }
+
+    const queue = this.queues.get('demo-data-generation');
+    if (!queue) {
+      throw new Error('Demo data queue not available');
+    }
+
+    const job = await queue.add(options.jobName || 'demo-data-refresh', {
+      type: 'demo-data-refresh',
+      data: payload
+    }, {
+      removeOnComplete: 25,
+      removeOnFail: 25,
+      ...options
+    });
+
+    this.logger.info('📦 Demo data refresh job enqueued', {
+      jobId: job.id,
+      accounts: Array.isArray(payload.accounts) ? payload.accounts.length : 'default'
+    });
+
+    return job;
+  }
+
+  async scheduleDemoDataRefresh(payload, options = {}) {
+    if (!this.enabled) {
+      throw new Error('Job queue not enabled');
+    }
+
+    const queue = this.queues.get('demo-data-generation');
+    if (!queue) {
+      throw new Error('Demo data queue not available');
+    }
+
+    const cron = options.repeat?.pattern || options.cron || this.config.demo?.scheduling?.cron;
+    if (!cron) {
+      throw new Error('Cron expression required for demo data scheduling');
+    }
+
+    const jobName = options.jobName || 'demo-data-refresh';
+
+    try {
+      await queue.removeRepeatable(jobName, { pattern: cron });
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        this.logger.debug('Demo data schedule removal skipped', { jobName, error: error.message });
+      }
+    }
+
+    const job = await queue.add(jobName, {
+      type: 'demo-data-refresh',
+      data: payload
+    }, {
+      repeat: { pattern: cron },
+      removeOnComplete: 10,
+      removeOnFail: 10,
+      jobId: jobName,
+      ...options
+    });
+
+    if (this.redisService?.setSchedule) {
+      await this.redisService.setSchedule(`demo-data:${jobName}`, {
+        cronExpression: cron,
+        payload,
+        jobName,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    this.logger.info('📅 Demo data refresh schedule updated', {
+      jobId: job.id,
+      cron,
+      jobName
     });
 
     return job;

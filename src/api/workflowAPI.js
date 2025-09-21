@@ -10,6 +10,8 @@ import { createPeopleAIAPI } from './peopleAIAPI.js';
 import { createInstructorAPI } from './instructorAPI.js';
 import { createCRMAPI } from './crmAPI.js';
 import { createMonitoringAPI } from './monitoringAPI.js';
+import { createDemoDataAPI } from './demoDataAPI.js';
+import { INTEGRATION_PROVIDERS } from '../services/integrationService.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Logger } from '../utils/logger.js';
@@ -33,6 +35,8 @@ export class WorkflowAPI {
       getPostgresService: () => this.orchestrator.postgresService
     });
     this.monitoringInitialized = false;
+    this.oktaService = this.orchestrator.getOktaService();
+    this.integrationService = this.orchestrator.getIntegrationService();
     this.setupMiddleware();
     this.setupBullBoard();
     this.setupRoutes();
@@ -293,6 +297,10 @@ export class WorkflowAPI {
     
     // Integration status
     this.app.get('/integration/status', this.getIntegrationStatus.bind(this));
+    this.app.get('/integration/oauth/:provider/start', this.startIntegrationOAuth.bind(this));
+    this.app.get('/integration/oauth/:provider/callback', this.handleIntegrationOAuth.bind(this));
+    this.app.post('/integration/pipedream/push', this.pushPipedreamEvent.bind(this));
+    this.app.post('/integration/peopleai/push', this.pushPeopleAI.bind(this));
     this.app.post('/external/sync', this.syncExternal.bind(this));
     this.app.get('/data/:account/summary', this.getDataSummary.bind(this));
     this.app.get('/status/distribution', this.getDistributionStatus.bind(this));
@@ -309,6 +317,11 @@ export class WorkflowAPI {
     // Minimal Klavis OAuth (demo stub)
     this.app.get('/auth/klavis/start', this.startKlavisAuth.bind(this));
     this.app.get('/auth/klavis/callback', this.klavisAuthCallback.bind(this));
+
+    // Okta SSO
+    this.app.get('/auth/okta/start', this.startOktaAuth.bind(this));
+    this.app.get('/auth/okta/callback', this.handleOktaCallback.bind(this));
+    this.app.get('/auth/okta/status', this.getOktaStatus.bind(this));
 
     // Template routes
     this.app.get('/templates', this.getWorkflowTemplates.bind(this));
@@ -329,6 +342,7 @@ export class WorkflowAPI {
     this.app.delete('/queue/schedules/:workflowName', this.removeSchedule.bind(this));
 
     // Demo API routes
+    this.app.use('/api/demo-data', createDemoDataAPI(this.orchestrator));
     this.app.use('/api', createDemoAPI(this.orchestrator));
     
     // Authentication API routes (Supabase Auth)
@@ -1081,11 +1095,162 @@ export class WorkflowAPI {
 
   async getIntegrationStatus(req, res) {
     try {
-      const status = await this.orchestrator.dataManager.getStatus();
-      res.json({ status: 'success', integration: status });
+      const integration = await this.orchestrator.dataManager.getStatus();
+
+      let connectors = {};
+      if (this.integrationService) {
+        try {
+          connectors = await this.integrationService.getStatus();
+        } catch (error) {
+          this.logger.warn('⚠️ Integration service status error', { error: error.message });
+        }
+      }
+
+      const oktaStatus = { enabled: false };
+      if (this.oktaService) {
+        oktaStatus.enabled = this.oktaService.isEnabled();
+        if (oktaStatus.enabled) {
+          try {
+            const tokens = await this.oktaService.getStoredTokens();
+            oktaStatus.tokensCached = !!tokens?.access_token;
+            oktaStatus.receivedAt = tokens?.receivedAt || null;
+          } catch (error) {
+            this.logger.warn('⚠️ Okta status lookup failed', { error: error.message });
+          }
+        }
+      }
+
+      res.json({ status: 'success', integration, connectors, okta: oktaStatus });
     } catch (error) {
       this.logger.error('❌ Failed to get integration status', { error: error.message });
       res.status(500).json({ error: 'Failed to get integration status', message: error.message });
+    }
+  }
+
+  resolveIntegrationProvider(raw) {
+    const normalized = String(raw || '').toLowerCase();
+    if (normalized === 'pipedream') return INTEGRATION_PROVIDERS.PIPEDREAM;
+    if (normalized === 'peopleai' || normalized === 'people-ai' || normalized === 'people_ai') {
+      return INTEGRATION_PROVIDERS.PEOPLE_AI;
+    }
+    throw new Error(`Unknown integration provider: ${raw}`);
+  }
+
+  async startIntegrationOAuth(req, res) {
+    if (!this.integrationService) {
+      return res.status(503).json({ success: false, error: 'Integration service unavailable' });
+    }
+    try {
+      const provider = this.resolveIntegrationProvider(req.params.provider);
+      const result = await this.integrationService.getOAuthUrl(provider, {
+        redirectUri: req.query.redirect_uri,
+        prompt: req.query.prompt
+      });
+      if (req.query.redirect === 'true') {
+        return res.redirect(result.url);
+      }
+      res.json({ success: true, provider, ...result });
+    } catch (error) {
+      this.logger.error('❌ Failed to start integration OAuth', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async handleIntegrationOAuth(req, res) {
+    if (!this.integrationService) {
+      return res.status(503).json({ success: false, error: 'Integration service unavailable' });
+    }
+    try {
+      const provider = this.resolveIntegrationProvider(req.params.provider);
+      const { code, state } = req.query;
+      const tokens = await this.integrationService.handleOAuthCallback(provider, { code, state });
+      res.json({ success: true, provider, tokens });
+    } catch (error) {
+      this.logger.error('❌ Integration OAuth callback failed', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async pushPipedreamEvent(req, res) {
+    if (!this.integrationService?.isEnabled(INTEGRATION_PROVIDERS.PIPEDREAM)) {
+      return res.status(503).json({ success: false, error: 'Pipedream integration not enabled' });
+    }
+    try {
+      const { eventName = 'account-plan-generated', payload = {}, options = {} } = req.body || {};
+      const result = await this.integrationService.pushPipedreamEvent(eventName, payload, options);
+      res.json({ success: true, event: eventName, result });
+    } catch (error) {
+      this.logger.error('❌ Failed to push event to Pipedream', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async pushPeopleAI(req, res) {
+    if (!this.integrationService?.isEnabled(INTEGRATION_PROVIDERS.PEOPLE_AI)) {
+      return res.status(503).json({ success: false, error: 'People.ai connector not enabled' });
+    }
+    try {
+      const { payload = {}, options = {} } = req.body || {};
+      const result = await this.integrationService.pushPeopleAI(payload, options);
+      res.json({ success: true, result });
+    } catch (error) {
+      this.logger.error('❌ Failed to push payload to People.ai', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async startOktaAuth(req, res) {
+    if (!this.oktaService?.isEnabled()) {
+      return res.status(503).json({ success: false, error: 'Okta SSO not enabled' });
+    }
+    try {
+      const result = await this.oktaService.getAuthorizationUrl({
+        redirectUri: req.query.redirect_uri,
+        prompt: req.query.prompt,
+        scopes: req.query.scope
+      });
+      if (req.query.redirect === 'true') {
+        return res.redirect(result.url);
+      }
+      res.json({ success: true, provider: 'okta', ...result });
+    } catch (error) {
+      this.logger.error('❌ Failed to start Okta OAuth', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async handleOktaCallback(req, res) {
+    if (!this.oktaService?.isEnabled()) {
+      return res.status(503).json({ success: false, error: 'Okta SSO not enabled' });
+    }
+    try {
+      const { code, state } = req.query;
+      const result = await this.oktaService.handleCallback({ code, state });
+      res.json({ success: true, provider: 'okta', ...result });
+    } catch (error) {
+      this.logger.error('❌ Okta OAuth callback failed', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async getOktaStatus(req, res) {
+    if (!this.oktaService) {
+      return res.status(503).json({ success: false, error: 'Okta service unavailable' });
+    }
+    try {
+      const enabled = this.oktaService.isEnabled();
+      const tokens = enabled ? await this.oktaService.getStoredTokens() : null;
+      res.json({
+        success: true,
+        okta: {
+          enabled,
+          tokensCached: !!tokens?.access_token,
+          receivedAt: tokens?.receivedAt || null
+        }
+      });
+    } catch (error) {
+      this.logger.error('❌ Failed to get Okta status', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
     }
   }
 
